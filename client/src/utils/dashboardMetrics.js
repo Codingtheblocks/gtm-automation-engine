@@ -120,7 +120,7 @@ const getFallbackVariant = (lead) => {
     return explicitVariant;
   }
 
-  const assignmentSeed = `${lead.id || ''}::${lead.name || ''}::${lead.address || ''}::${lead.city || ''}`;
+  const assignmentSeed = String(lead.id || '').trim() || `${lead.name || ''}::${lead.address || ''}::${lead.city || ''}`;
   return hashVariantSeed(assignmentSeed) % 2 === 0 ? 'A' : 'B';
 };
 
@@ -226,6 +226,18 @@ export const getLeadFilterOptions = ({ visibleLeads, dashboardFilters }) => ({
   enrichmentLevels: ['enriched', 'not_enriched'],
 });
 
+export const getConfidenceBadgeClassName = (level = '') => {
+  if (level === 'High') {
+    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200';
+  }
+
+  if (level === 'Medium') {
+    return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+  }
+
+  return 'border-slate-700 bg-slate-900/70 text-slate-300';
+};
+
 export const getOverviewKpiCards = (overview) => {
   const kpis = overview?.kpis;
 
@@ -233,15 +245,20 @@ export const getOverviewKpiCards = (overview) => {
     return [];
   }
 
+  const trackedMetricsHelper = kpis.metricSource === 'benchmark'
+    ? 'Benchmark-backed until live opens/clicks are recorded'
+    : 'Live tracked events from local interactions';
+
   return [
     { label: 'Leads Processed', value: formatNumber(kpis.leadsProcessed), helper: 'Tracked drafted leads in SQLite' },
     { label: 'Leads Enriched', value: formatNumber(kpis.enrichedLeads), helper: 'Top-N leads routed through enrichment' },
     { label: 'Avg Lead Score', value: Number(kpis.averageLeadScore || 0).toFixed(1), helper: 'Average quality of processed leads' },
     { label: 'Cost / Lead', value: formatCurrency(kpis.costPerLead), helper: 'Total cost divided by processed leads' },
     { label: 'Cost / Click', value: formatCurrency(kpis.costPerClick), helper: 'Total cost divided by unique clicks' },
-    { label: 'CTR', value: formatPercent(kpis.overallCtr), helper: 'Unique clicks / leads processed' },
-    { label: 'Open Rate', value: formatPercent(kpis.openRate), helper: 'Unique opens / leads processed' },
-    { label: 'CTOR', value: formatPercent(kpis.ctor), helper: 'Unique clicks / unique opens' },
+    { label: 'CTR', value: formatPercent(kpis.overallCtr), helper: trackedMetricsHelper },
+    { label: 'Open Rate', value: formatPercent(kpis.openRate), helper: trackedMetricsHelper },
+    { label: 'CTOR', value: formatPercent(kpis.ctor), helper: trackedMetricsHelper },
+    { label: 'Engagement Rate', value: formatPercent(kpis.engagementRate), helper: trackedMetricsHelper },
     { label: 'Cost / Engagement', value: formatCurrency(kpis.costPerEngagement), helper: 'Total cost / (opens + clicks)' },
   ];
 };

@@ -9,6 +9,7 @@ import {
   buildTrackingTokens,
   buildTrackingUrls,
   getTrackingPixelBuffer,
+  recordManualLeadEvent,
   recordTrackingEvent,
   resolveTrackingToken,
   saveTrackedEmail,
@@ -48,6 +49,7 @@ const buildLeadRecord = ({ business, cityCenter, enrichmentCount }) => {
     id: business.id || business.placeId,
     placeId: business.placeId || business.id,
     ...business,
+    city: business.city || business.geography || cityCenter.formattedAddress || 'Unknown',
     distanceMiles: distanceMiles === null ? null : Number(distanceMiles.toFixed(1)),
     leadScore: score.normalizedScore,
     scoreTier: getScoreTier(score.normalizedScore),
@@ -85,6 +87,8 @@ const enrichLead = async (lead) => {
   const detailedLead = {
     ...lead,
     address: details.formatted_address || lead.address || '',
+    city: details.city || details.geography || lead.city || '',
+    state: details.state || lead.state || '',
     phone: details.formatted_phone_number || lead.phone || '',
     website: details.website || lead.website || '',
     rating: details.rating || lead.rating || 0,
@@ -169,6 +173,7 @@ const buildGeneratedEmailLeadRecord = async (lead) => {
     leadId: fullyEnrichedLead.id,
     businessName: fullyEnrichedLead.name,
     location: fullyEnrichedLead.address,
+    city: fullyEnrichedLead.city,
   });
   const { clickToken, openToken } = buildTrackingTokens({
     leadId: fullyEnrichedLead.id,
@@ -209,6 +214,8 @@ const buildGeneratedEmailLeadRecord = async (lead) => {
     website: fullyEnrichedLead.website,
     phone: fullyEnrichedLead.phone,
     address: fullyEnrichedLead.address,
+    city: fullyEnrichedLead.city,
+    state: fullyEnrichedLead.state,
     category: fullyEnrichedLead.category,
     enrichment: fullyEnrichedLead.enrichment,
     enrichmentStatus: 'enriched',
@@ -322,6 +329,25 @@ router.post('/prompt-settings', async (request, response) => {
   } catch (error) {
     return response.status(500).json({
       message: error.message || 'Failed to update prompt settings',
+    });
+  }
+});
+
+router.post('/:leadId/events', (request, response) => {
+  try {
+    const lead = recordManualLeadEvent({
+      leadId: request.params.leadId,
+      eventType: request.body?.eventType,
+      userAgent: request.get('user-agent') || 'manual_override',
+      ipAddress: request.ip || 'local',
+    });
+
+    return response.json({
+      lead,
+    });
+  } catch (error) {
+    return response.status(400).json({
+      message: error.message || 'Failed to record lead event',
     });
   }
 });

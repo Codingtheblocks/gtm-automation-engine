@@ -13,6 +13,7 @@ import {
 
 const LEADS_API_BASE_URL = 'http://localhost:3001/api/leads';
 const DASHBOARD_API_BASE_URL = 'http://localhost:3001/api/dashboard';
+const DASHBOARD_POLL_INTERVAL_MS = 5000;
 const STORAGE_KEY = 'repair-shops-dashboard-state';
 const DEFAULT_COMPANY_URL = 'http://localhost:5173/company-site';
 const EMPTY_PROMPT_SETTINGS = {
@@ -97,6 +98,7 @@ function App() {
   const [loadingPromptSettings, setLoadingPromptSettings] = useState(true);
   const [savingPromptSettings, setSavingPromptSettings] = useState(false);
   const [promptSettingsStatus, setPromptSettingsStatus] = useState('');
+  const [manualEventKey, setManualEventKey] = useState('');
 
   const loadPromptSettings = async () => {
     setLoadingPromptSettings(true);
@@ -123,8 +125,10 @@ function App() {
     }
   };
 
-  const loadDashboardData = async () => {
-    setLoadingDashboard(true);
+  const loadDashboardData = async ({ showLoading = true } = {}) => {
+    if (showLoading) {
+      setLoadingDashboard(true);
+    }
 
     try {
       const response = await fetch(DASHBOARD_API_BASE_URL);
@@ -142,7 +146,9 @@ function App() {
     } catch (requestError) {
       setError(requestError.message);
     } finally {
-      setLoadingDashboard(false);
+      if (showLoading) {
+        setLoadingDashboard(false);
+      }
     }
   };
 
@@ -166,6 +172,14 @@ function App() {
       }),
     );
   }, [filters, form, leads, searchMetadata]);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      loadDashboardData({ showLoading: false });
+    }, DASHBOARD_POLL_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   const handleFormChange = (event) => {
     const { name, value } = event.target;
@@ -394,6 +408,39 @@ function App() {
     }
   };
 
+  const handleRecordLeadEvent = async (lead, eventType) => {
+    if (!lead?.id) {
+      return;
+    }
+
+    const nextManualEventKey = `${lead.id}:${eventType}`;
+    setManualEventKey(nextManualEventKey);
+    setError('');
+
+    try {
+      const response = await fetch(`${LEADS_API_BASE_URL}/${lead.id}/events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ eventType }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to record lead event');
+      }
+
+      await loadDashboardData({ showLoading: false });
+      setSelectedLead((currentLead) => (currentLead?.id === lead.id ? { ...currentLead, ...(data.lead || {}) } : currentLead));
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setManualEventKey('');
+    }
+  };
+
   const trackedLeadMap = useMemo(
     () => new Map((dashboardData.leads?.rows || []).map((lead) => [lead.id, lead])),
     [dashboardData.leads?.rows],
@@ -515,8 +562,10 @@ function App() {
         initialTab={selectedLeadTab}
         enrichingLeadId={enrichingLeadId}
         generatingLeadId={generatingLeadId}
+        manualEventKey={manualEventKey}
         onEnrich={handleEnrichLead}
         onGenerateEmail={handleGenerateEmailForLead}
+        onRecordEvent={handleRecordLeadEvent}
         onClose={() => {
           setSelectedLead(null);
           setSelectedLeadTab('profile');

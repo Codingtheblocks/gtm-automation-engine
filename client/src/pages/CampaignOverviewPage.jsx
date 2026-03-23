@@ -4,6 +4,7 @@ import {
   formatCurrency,
   formatNumber,
   formatPercent,
+  getConfidenceBadgeClassName,
   getOverviewKpiCards,
 } from '../utils/dashboardMetrics.js';
 
@@ -37,9 +38,11 @@ function CampaignOverviewPage({ overview, draftedLeadCount }) {
   const kpiCards = getOverviewKpiCards(overview);
   const comparisonRows = overview?.abPerformance?.comparisonRows || [];
   const winner = overview?.abPerformance?.winner;
+  const dataConfidence = overview?.abPerformance?.dataConfidence;
   const bestScoreRange = overview?.segmentInsights?.bestScoreRange;
   const bestCity = overview?.segmentInsights?.bestCity;
   const enrichmentImpact = overview?.segmentInsights?.enrichmentImpact;
+  const benchmarkNote = overview?.abPerformance?.notes?.benchmark;
 
   return (
     <div className="space-y-6">
@@ -67,6 +70,15 @@ function CampaignOverviewPage({ overview, draftedLeadCount }) {
       >
         <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
           <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Experiment read quality</p>
+                <p className="mt-1 text-sm text-slate-300">{dataConfidence?.reason || 'Collect more tracked events to improve confidence.'}</p>
+              </div>
+              <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getConfidenceBadgeClassName(dataConfidence?.level)}`}>
+                Data Confidence: {dataConfidence?.level || 'Low'}
+              </span>
+            </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-800 text-left">
                 <thead className="bg-slate-950 text-xs uppercase tracking-wide text-slate-400">
@@ -89,6 +101,11 @@ function CampaignOverviewPage({ overview, draftedLeadCount }) {
                 </tbody>
               </table>
             </div>
+            {benchmarkNote ? (
+              <div className="border-t border-slate-800 px-4 py-3 text-xs text-amber-200">
+                {benchmarkNote}
+              </div>
+            ) : null}
             {overview?.abPerformance?.notes?.replies ? (
               <div className="border-t border-slate-800 px-4 py-3 text-xs text-slate-400">
                 {overview.abPerformance.notes.replies}
@@ -107,14 +124,21 @@ function CampaignOverviewPage({ overview, draftedLeadCount }) {
                   ? `+${winner.ctrLiftPercent}% higher CTR • ${winner.costPerClickReductionPercent}% lower cost per click`
                   : 'Generate more tracked drafts to create a reliable decision signal.'}
               </p>
+              <p className="mt-3 text-xs text-emerald-200/80">
+                {dataConfidence?.level === 'High'
+                  ? 'This winner is strong enough to inform allocation changes.'
+                  : 'Treat this as directional until sample size and event density improve.'}
+              </p>
             </div>
 
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Recommended action</p>
               <div className="mt-3 space-y-3 text-sm text-slate-200">
                 {(overview?.recommendations || []).map((recommendation) => (
-                  <div key={recommendation} className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3">
-                    {recommendation}
+                  <div key={`${recommendation.category}-${recommendation.title}`} className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{recommendation.category}</p>
+                    <p className="mt-2 font-medium text-white">{recommendation.title}</p>
+                    <p className="mt-1 text-slate-300">{recommendation.detail}</p>
                   </div>
                 ))}
               </div>
@@ -142,9 +166,20 @@ function CampaignOverviewPage({ overview, draftedLeadCount }) {
           </InsightCard>
 
           <InsightCard title="Enrichment impact">
-            <p className="text-sm text-slate-300">Enriched CTR: {formatPercent(enrichmentImpact?.enrichedCtr)}</p>
-            <p className="text-sm text-slate-300">Non-enriched CTR: {formatPercent(enrichmentImpact?.nonEnrichedCtr)}</p>
-            <p className="text-sm text-slate-400">{enrichmentImpact?.insight || 'No enrichment impact signal available yet.'}</p>
+            {enrichmentImpact?.hasEnoughData ? (
+              <>
+                <p className="text-sm text-slate-300">Enriched CTR: {formatPercent(enrichmentImpact?.enrichedCtr)}</p>
+                <p className="text-sm text-slate-300">Non-enriched CTR: {formatPercent(enrichmentImpact?.nonEnrichedCtr)}</p>
+                <p className="text-sm text-slate-400">{enrichmentImpact?.insight || 'No enrichment impact signal available yet.'}</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-white">{enrichmentImpact?.message || 'Not enough enriched leads yet to measure performance'}</p>
+                <p className="text-sm text-slate-300">Enriched leads: {formatNumber(enrichmentImpact?.enrichedLeadCount || 0)}</p>
+                <p className="text-sm text-slate-300">Non-enriched leads: {formatNumber(enrichmentImpact?.nonEnrichedLeadCount || 0)}</p>
+                <p className="text-sm text-slate-400">{enrichmentImpact?.insight || 'No enrichment impact signal available yet.'}</p>
+              </>
+            )}
           </InsightCard>
         </div>
       </SectionPanel>

@@ -4,6 +4,60 @@ const PLACES_TEXT_SEARCH_URL = 'https://maps.googleapis.com/maps/api/place/texts
 const PLACES_DETAILS_URL = 'https://maps.googleapis.com/maps/api/place/details/json';
 const GEOCODE_URL = 'https://maps.googleapis.com/maps/api/geocode/json';
 const METERS_PER_MILE = 1609.34;
+const STREET_SUFFIX_PATTERN = /\b(st|street|ave|avenue|blvd|boulevard|rd|road|dr|drive|ln|lane|ct|court|cir|circle|trl|trail|way|pkwy|parkway|pl|place|ter|terrace|hwy|highway|suite|ste|unit)\b/i;
+const US_STATE_ABBREVIATIONS = {
+  alabama: 'AL',
+  alaska: 'AK',
+  arizona: 'AZ',
+  arkansas: 'AR',
+  california: 'CA',
+  colorado: 'CO',
+  connecticut: 'CT',
+  delaware: 'DE',
+  florida: 'FL',
+  georgia: 'GA',
+  hawaii: 'HI',
+  idaho: 'ID',
+  illinois: 'IL',
+  indiana: 'IN',
+  iowa: 'IA',
+  kansas: 'KS',
+  kentucky: 'KY',
+  louisiana: 'LA',
+  maine: 'ME',
+  maryland: 'MD',
+  massachusetts: 'MA',
+  michigan: 'MI',
+  minnesota: 'MN',
+  mississippi: 'MS',
+  missouri: 'MO',
+  montana: 'MT',
+  nebraska: 'NE',
+  nevada: 'NV',
+  'new hampshire': 'NH',
+  'new jersey': 'NJ',
+  'new mexico': 'NM',
+  'new york': 'NY',
+  'north carolina': 'NC',
+  'north dakota': 'ND',
+  ohio: 'OH',
+  oklahoma: 'OK',
+  oregon: 'OR',
+  pennsylvania: 'PA',
+  'rhode island': 'RI',
+  'south carolina': 'SC',
+  'south dakota': 'SD',
+  tennessee: 'TN',
+  texas: 'TX',
+  utah: 'UT',
+  vermont: 'VT',
+  virginia: 'VA',
+  washington: 'WA',
+  'west virginia': 'WV',
+  wisconsin: 'WI',
+  wyoming: 'WY',
+  'district of columbia': 'DC',
+};
 
 const fetchJson = async (url) => {
   const response = await fetch(url);
@@ -79,11 +133,141 @@ export const getCityCenter = async (city) => {
 };
 
 export const getPlaceDetails = async (placeId) => {
-  const fields = ['name', 'formatted_address', 'formatted_phone_number', 'website', 'rating', 'user_ratings_total', 'geometry', 'types'].join(',');
+  const fields = ['name', 'formatted_address', 'formatted_phone_number', 'website', 'rating', 'user_ratings_total', 'geometry', 'types', 'address_component'].join(',');
   const url = `${PLACES_DETAILS_URL}?place_id=${encodeURIComponent(placeId)}&fields=${fields}&key=${env.googlePlacesApiKey}`;
   const data = await fetchJson(url);
 
-  return data.result || {};
+  const result = data.result || {};
+  const geography = normalizePlaceGeography({ place: result, fallbackAddress: result.formatted_address || '' });
+
+  return {
+    ...result,
+    city: geography.cityState,
+    state: geography.state,
+    geography: geography.cityState,
+  };
+};
+
+const cleanAddressSegment = (value = '') => String(value || '').trim().replace(/^,+|,+$/g, '');
+
+const isStreetAddressSegment = (value = '') => {
+  const normalizedValue = cleanAddressSegment(value);
+
+  if (!normalizedValue) {
+    return false;
+  }
+
+  return /^\d+\b/.test(normalizedValue) || STREET_SUFFIX_PATTERN.test(normalizedValue);
+};
+
+const normalizeStateCode = (value = '') => {
+  const normalizedValue = cleanAddressSegment(value);
+
+  if (!normalizedValue) {
+    return '';
+  }
+
+  const upperValue = normalizedValue.toUpperCase();
+
+  if (/^[A-Z]{2}$/.test(upperValue)) {
+    return upperValue;
+  }
+
+  const stateToken = upperValue.match(/\b([A-Z]{2})\b/);
+
+  if (stateToken) {
+    return stateToken[1];
+  }
+
+  return US_STATE_ABBREVIATIONS[normalizedValue.toLowerCase()] || '';
+};
+
+const getAddressComponent = (addressComponents = [], types = [], field = 'long_name') => {
+  const typeList = Array.isArray(types) ? types : [types];
+  const match = addressComponents.find((component) =>
+    typeList.every((type) => component.types?.includes(type))
+  );
+
+  return cleanAddressSegment(match?.[field] || '');
+};
+
+const parseCityStateFromFormattedAddress = (formattedAddress = '') => {
+  const segments = String(formattedAddress || '')
+    .split(',')
+    .map((segment) => cleanAddressSegment(segment))
+    .filter(Boolean);
+
+  if (!segments.length) {
+    return {
+      city: '',
+      state: '',
+      cityState: '',
+    };
+  }
+
+  let state = '';
+  let stateIndex = -1;
+
+  for (let index = 0; index < segments.length; index += 1) {
+    const candidateState = normalizeStateCode(segments[index]);
+
+    if (candidateState) {
+      state = candidateState;
+      stateIndex = index;
+      break;
+    }
+  }
+
+  let city = '';
+
+  if (stateIndex > 0) {
+    for (let index = stateIndex - 1; index >= 0; index -= 1) {
+      if (!isStreetAddressSegment(segments[index])) {
+        city = segments[index];
+        break;
+      }
+    }
+  }
+
+  if (!city) {
+    city = segments.find((segment) => !isStreetAddressSegment(segment)) || '';
+  }
+
+  return {
+    city,
+    state,
+    cityState: city && state ? `${city}, ${state}` : city || state,
+  };
+};
+
+export const normalizePlaceGeography = ({ place = {}, fallbackAddress = '' }) => {
+  const addressComponents = place.address_components || place.addressComponents || [];
+  const parsedAddress = parseCityStateFromFormattedAddress(
+    place.formatted_address || place.formattedAddress || place.address || fallbackAddress,
+  );
+  const city = cleanAddressSegment(
+    place.city
+    || place.locality
+    || getAddressComponent(addressComponents, 'locality')
+    || getAddressComponent(addressComponents, 'postal_town')
+    || getAddressComponent(addressComponents, 'administrative_area_level_3')
+    || getAddressComponent(addressComponents, 'sublocality_level_1')
+    || getAddressComponent(addressComponents, 'administrative_area_level_2')
+    || parsedAddress.city,
+  );
+  const state = normalizeStateCode(
+    place.state
+    || place.region
+    || getAddressComponent(addressComponents, 'administrative_area_level_1', 'short_name')
+    || getAddressComponent(addressComponents, 'administrative_area_level_1')
+    || parsedAddress.state,
+  );
+
+  return {
+    city,
+    state,
+    cityState: city && state ? `${city}, ${state}` : city || state || 'Unknown',
+  };
 };
 
 const searchPlacesByRadius = async ({ keyword, cityCenter, radiusMiles }) => {
@@ -91,24 +275,31 @@ const searchPlacesByRadius = async ({ keyword, cityCenter, radiusMiles }) => {
   const url = `${PLACES_TEXT_SEARCH_URL}?query=${encodeURIComponent(keyword)}&location=${cityCenter.location.lat},${cityCenter.location.lng}&radius=${radiusMeters}&key=${env.googlePlacesApiKey}`;
   const data = await fetchJson(url);
 
-  return (data.results || []).map((place) => ({
-    placeId: place.place_id,
-    name: place.name || '',
-    address: place.formatted_address || '',
-    phone: '',
-    website: null,
-    rating: place.rating || 0,
-    reviewCount: place.user_ratings_total || 0,
-    location: place.geometry?.location || null,
-    category: place.types?.[0] || keyword,
-    enrichment: {
-      homepageText: '',
-      homepageSummary: '',
-      inferredServices: [],
-    },
-    enrichmentStatus: 'lightweight',
-    generatedEmail: '',
-  }));
+  return (data.results || []).map((place) => {
+    const geography = normalizePlaceGeography({ place, fallbackAddress: place.formatted_address || '' });
+
+    return {
+      placeId: place.place_id,
+      name: place.name || '',
+      address: place.formatted_address || '',
+      city: geography.cityState,
+      state: geography.state,
+      geography: geography.cityState,
+      phone: '',
+      website: null,
+      rating: place.rating || 0,
+      reviewCount: place.user_ratings_total || 0,
+      location: place.geometry?.location || null,
+      category: place.types?.[0] || keyword,
+      enrichment: {
+        homepageText: '',
+        homepageSummary: '',
+        inferredServices: [],
+      },
+      enrichmentStatus: 'lightweight',
+      generatedEmail: '',
+    };
+  });
 };
 
 export const searchBusinesses = async ({ city, keyword }) => {

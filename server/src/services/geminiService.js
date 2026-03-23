@@ -355,9 +355,39 @@ export const regenerateLowScoreTemplates = async () => {
   };
 };
 
-export const getOfferVariantForLead = ({ leadId = '', businessName = '', location = '' }) => {
-  const assignmentKey = `${leadId}::${businessName}::${location}`.trim();
-  return hashString(assignmentKey) % 2 === 0 ? 'offer_a.md' : 'offer_b.md';
+export const normalizeOfferExperimentVariant = (value = '') => {
+  const normalizedValue = String(value || '').trim().toUpperCase();
+
+  if (!normalizedValue) {
+    return '';
+  }
+
+  if (normalizedValue === 'A' || normalizedValue.includes('OFFER_A') || normalizedValue.endsWith('_A') || normalizedValue.includes('VARIANT_A')) {
+    return 'A';
+  }
+
+  if (normalizedValue === 'B' || normalizedValue.includes('OFFER_B') || normalizedValue.endsWith('_B') || normalizedValue.includes('VARIANT_B')) {
+    return 'B';
+  }
+
+  return '';
+};
+
+export const getDeterministicVariantLabel = ({ leadId = '', businessName = '', location = '', city = '' }) => {
+  const canonicalLeadId = String(leadId || '').trim();
+  const fallbackSeed = `${businessName}::${location}::${city}`.trim();
+  const assignmentSeed = canonicalLeadId || fallbackSeed;
+
+  return hashString(assignmentSeed) % 2 === 0 ? 'A' : 'B';
+};
+
+export const getOfferVariantFilenameFromLabel = (variantLabel = '') => (
+  normalizeOfferExperimentVariant(variantLabel) === 'B' ? 'offer_b.md' : 'offer_a.md'
+);
+
+export const getOfferVariantForLead = ({ leadId = '', businessName = '', location = '', city = '' }) => {
+  const variantLabel = getDeterministicVariantLabel({ leadId, businessName, location, city });
+  return getOfferVariantFilenameFromLabel(variantLabel);
 };
 
 export const getToneFromScore = (score = 0) => {

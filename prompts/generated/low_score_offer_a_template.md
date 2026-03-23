@@ -1,10 +1,12 @@
-Subject: Helping {{businessName}} keep bays turning
+Subject: Parts support for {{businessName}}
 
-Sourcing parts shouldn't slow your shop down or strain your cash flow. At {{companyName}}, we help local shops in {{location}} stay on schedule with a more practical approach to parts.
+Hi,
 
-To help you take on more work without tying up capital, we offer flexible billing where you pay after the job is completed. It keeps your bays moving and your margins strong.
+I’m with {{companyName}}. We work with shops in {{location}} to help get parts delivered quickly and keep jobs moving.
 
-Would you be open to a quick conversation about your current parts sourcing?
+We focus on supporting your cash flow by letting you pay for parts after the job is finished, rather than upfront. It’s a simple way to take the pressure off your working capital so you can turn bays faster and stay profitable.
+
+Would you be open to a brief conversation about how we can support your shop?
 
 Best,
 {{companyName}}

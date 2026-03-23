@@ -1,12 +1,12 @@
-Subject: Keeping bays moving at {{businessName}}
+Subject: Parts delivery for {{businessName}}
 
-Hi {{businessName}},
+Hi there,
 
-I’m with {{companyName}}, and we help shops in {{location}} reduce repair downtime by getting parts on-site faster.
+I’m reaching out from {{companyName}} regarding your shop in {{location}}. We focus on helping local teams reduce repair downtime by providing same-day or next-day delivery on critical parts.
 
-We offer same-day or next-day delivery to ensure your technicians stay productive and vehicles move through your bays without unnecessary delays. Our goal is to help you complete more jobs profitably by providing the reliable support your team needs to hit deadlines.
+We understand that keeping bays turning is essential for your margins. Our goal is to ensure you aren't held up by parts delays so your technicians can stay productive and jobs keep moving.
 
-Would you be open to a quick introductory call to see if we’re a fit for your shop?
+Would you be open to a quick chat about how we can support your operations?
 
 Best,
 {{companyName}}

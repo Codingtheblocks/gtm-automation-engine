@@ -27,7 +27,7 @@ function InsightCard({ label, value, helper }) {
   );
 }
 
-function EmailModal({ lead, initialTab = 'profile', enrichingLeadId = '', generatingLeadId = '', onEnrich, onGenerateEmail, onClose }) {
+function EmailModal({ lead, initialTab = 'profile', enrichingLeadId = '', generatingLeadId = '', manualEventKey = '', onEnrich, onGenerateEmail, onRecordEvent, onClose }) {
   if (!lead) {
     return null;
   }
@@ -45,6 +45,8 @@ function EmailModal({ lead, initialTab = 'profile', enrichingLeadId = '', genera
 
   const isEnriching = enrichingLeadId === lead.id;
   const isGeneratingEmail = generatingLeadId === lead.id;
+  const isRecordingOpen = manualEventKey === `${lead.id}:open`;
+  const isRecordingClick = manualEventKey === `${lead.id}:click`;
   const services = lead.enrichment?.inferredServices || [];
   const scoreReasons = getLeadScoreReasons(lead);
   const engagementEvents = lead.events || [];
@@ -159,6 +161,33 @@ function EmailModal({ lead, initialTab = 'profile', enrichingLeadId = '', genera
                 <InsightCard label="Opens" value={String(lead.opens ?? 0)} helper="Total tracked opens" />
                 <InsightCard label="Clicks" value={String(lead.clicks ?? 0)} helper="Total tracked clicks" />
                 <InsightCard label="Last Activity" value={formatDateTime(lead.lastActivityAt)} helper="Most recent recorded open or click event" />
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Manual QA controls</p>
+                    <p className="mt-1 text-sm text-slate-400">Use these to force local open or click events into the same tracking pipeline used by real CTA and pixel interactions.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onRecordEvent?.(lead, 'open')}
+                      disabled={!lead.generatedEmail || isRecordingOpen || isRecordingClick}
+                      className="rounded-lg border border-emerald-500/40 px-3 py-2 text-xs font-medium text-emerald-100 transition hover:border-emerald-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isRecordingOpen ? 'Marking Opened...' : 'Mark Email Opened'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRecordEvent?.(lead, 'click')}
+                      disabled={!lead.generatedEmail || isRecordingOpen || isRecordingClick}
+                      className="rounded-lg border border-brand-500/40 px-3 py-2 text-xs font-medium text-brand-100 transition hover:border-brand-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isRecordingClick ? 'Marking Clicked...' : 'Mark URL Clicked'}
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="rounded-xl bg-slate-950/60 p-4">
