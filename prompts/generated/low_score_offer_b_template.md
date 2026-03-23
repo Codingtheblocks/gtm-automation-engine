@@ -1,12 +1,12 @@
-Subject: Moving jobs through {{businessName}} faster
+Subject: Keeping bays moving at {{businessName}}
 
-Hi there,
+Hi {{businessName}},
 
-Running a shop in {{location}} means keeping bays turning and avoiding parts delays. At {{companyName}}, we help repair shops source parts reliably with same-day or next-day delivery options.
+I’m with {{companyName}}, and we help shops in {{location}} reduce repair downtime by getting parts on-site faster.
 
-Our goal is to help {{businessName}} reduce downtime and get vehicles back to customers sooner. When you aren't waiting on parts, you’re completing more jobs profitably.
+We offer same-day or next-day delivery to ensure your technicians stay productive and vehicles move through your bays without unnecessary delays. Our goal is to help you complete more jobs profitably by providing the reliable support your team needs to hit deadlines.
 
-Would you be open to a brief conversation about how we can help keep your jobs moving?
+Would you be open to a quick introductory call to see if we’re a fit for your shop?
 
 Best,
 {{companyName}}

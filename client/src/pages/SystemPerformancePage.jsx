@@ -1,49 +1,73 @@
 import SectionPanel from '../components/dashboard/SectionPanel.jsx';
 import StatCard from '../components/dashboard/StatCard.jsx';
-import MetricBarChart from '../components/dashboard/MetricBarChart.jsx';
 import ScatterPlot from '../components/dashboard/ScatterPlot.jsx';
-import { getSystemCards, formatCurrency } from '../utils/dashboardMetrics.js';
+import {
+  formatCurrency,
+  formatPercent,
+  getSystemCards,
+} from '../utils/dashboardMetrics.js';
 
 function SystemPerformancePage({ systemPerformance }) {
   const cards = getSystemCards(systemPerformance);
+  const costBreakdown = systemPerformance?.visuals?.costBreakdown || [];
+  const enrichmentEfficiency = systemPerformance?.enrichmentEfficiency;
+  const processingStrategy = systemPerformance?.processingStrategy || [];
 
   return (
     <div className="space-y-6">
       <SectionPanel
-        eyebrow="RevOps + engineering view"
-        title="System efficiency and cost-aware performance"
-        description="This page translates the lead engine into operational efficiency: how expensive each path is, where tiering saves money, and how enrichment load is distributed."
+        eyebrow="Engineering layer"
+        title="System performance"
+        description="This page ties spend, processing complexity, and outcomes together so the pipeline looks intentional instead of random."
       >
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           {cards.map((card) => (
             <StatCard key={card.label} label={card.label} value={card.value} helper={card.helper} accent="amber" />
           ))}
         </div>
       </SectionPanel>
 
-      <SectionPanel eyebrow="Visual diagnostics" title="Cost vs quality" description="High-cost, low-score outliers are the fastest way to spot wasted enrichment spend.">
-        <ScatterPlot title="Cost vs lead score" subtitle="X = lead score, Y = estimated cost" points={systemPerformance?.visuals?.costVsLeadScore || []} />
-      </SectionPanel>
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        <SectionPanel eyebrow="Enrichment load" title="Enrichment distribution" description="Shows how many drafted leads ran through full enrichment vs cheaper paths.">
-          <MetricBarChart
-            title="Enrichment mix"
-            subtitle="Distribution of drafted lead paths"
-            data={(systemPerformance?.visuals?.enrichmentDistribution || []).map((item) => ({ label: item.label, value: item.value }))}
-            colorClassName="bg-violet-500"
-            valueFormatter={(value) => `${Number(value || 0)}`}
-          />
+      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+        <SectionPanel eyebrow="Spend composition" title="Cost breakdown" description="Provider-level cost estimates make it obvious where the system is spending money.">
+          <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
+            <table className="min-w-full divide-y divide-slate-800 text-left">
+              <thead className="bg-slate-950 text-xs uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th className="px-4 py-3">Component</th>
+                  <th className="px-4 py-3 text-right">Cost</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 text-sm text-slate-200">
+                {costBreakdown.map((item) => (
+                  <tr key={item.label}>
+                    <td className="px-4 py-4">{item.label}</td>
+                    <td className="px-4 py-4 text-right">{formatCurrency(item.value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </SectionPanel>
 
-        <SectionPanel eyebrow="Spend composition" title="Cost breakdown" description="Provider-level cost is derived centrally from the persisted lead path and estimated lead cost.">
+        <SectionPanel eyebrow="Cost vs performance" title="Where spend follows conversion potential" description="Each point represents a score cohort and includes CTR in the tooltip so you can see whether higher-cost paths are justified.">
+          <ScatterPlot title="Cost vs lead score" subtitle="X = lead score, Y = average cost, tooltip = CTR by score cohort" points={systemPerformance?.visuals?.costVsLeadScore || []} />
+        </SectionPanel>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+        <SectionPanel eyebrow="Enrichment efficiency" title="Did enrichment earn its keep?" description="This isolates whether the enriched path is actually beating the cheaper path in engagement quality.">
+          <div className="grid gap-4 md:grid-cols-3">
+            <StatCard label="Top enriched CTR" value={formatPercent(enrichmentEfficiency?.enrichedCtr)} helper="CTR for enriched leads" accent="emerald" />
+            <StatCard label="Remaining CTR" value={formatPercent(enrichmentEfficiency?.remainingCtr)} helper="CTR for non-enriched leads" accent="amber" />
+            <StatCard label="Cost Delta" value={formatCurrency(enrichmentEfficiency?.costDelta)} helper="Cost / lead delta between enriched and non-enriched paths" accent="brand" />
+          </div>
+        </SectionPanel>
+
+        <SectionPanel eyebrow="Processing strategy" title="How the pipeline allocates expensive work" description="This is the intentional system design that keeps costs aligned with likely conversion value.">
           <div className="space-y-3">
-            {(systemPerformance?.visuals?.costBreakdown || []).map((item) => (
-              <div key={item.label} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-300">{item.label}</span>
-                  <span className="text-sm font-semibold text-white">{formatCurrency(item.value)}</span>
-                </div>
+            {processingStrategy.map((item) => (
+              <div key={item} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-sm text-slate-200">
+                {item}
               </div>
             ))}
           </div>
@@ -51,7 +75,7 @@ function SystemPerformancePage({ systemPerformance }) {
       </div>
 
       {systemPerformance?.notes?.length ? (
-        <SectionPanel eyebrow="Assumptions" title="Estimated metrics currently in use" description="These are centralized estimates, not raw provider telemetry.">
+        <SectionPanel eyebrow="Assumptions" title="Current estimated metrics" description="These metrics are centralized estimates until raw provider telemetry is stored directly.">
           <div className="space-y-3 text-sm text-slate-300">
             {systemPerformance.notes.map((note) => (
               <div key={note} className="rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3">{note}</div>

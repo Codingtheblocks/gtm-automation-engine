@@ -1,40 +1,58 @@
 import { useEffect, useState } from 'react';
+import { formatDateTime, formatVariantBucket, getLeadScoreReasons } from '../utils/dashboardMetrics.js';
+
+const getGenerationModeLabel = (generationMode = '') => {
+  if (generationMode === 'generic_template' || generationMode === 'template') {
+    return 'Template-based generation';
+  }
+
+  if (generationMode === 'prompt_gemini' || generationMode === 'full_enrichment') {
+    return 'Full enrichment + Gemini';
+  }
+
+  if (generationMode === 'partial') {
+    return 'Partial personalization';
+  }
+
+  return 'Not generated yet';
+};
+
+function InsightCard({ label, value, helper }) {
+  return (
+    <div className="rounded-xl bg-slate-950/60 p-4">
+      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-2 text-sm text-slate-200">{value}</p>
+      {helper ? <p className="mt-1 text-sm text-slate-400">{helper}</p> : null}
+    </div>
+  );
+}
 
 function EmailModal({ lead, initialTab = 'profile', enrichingLeadId = '', generatingLeadId = '', onEnrich, onGenerateEmail, onClose }) {
   if (!lead) {
     return null;
   }
 
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTab] = useState(initialTab === 'email' ? 'email' : 'overview');
   const [copyStatus, setCopyStatus] = useState('');
 
   useEffect(() => {
-    setActiveTab(initialTab);
+    setActiveTab(initialTab === 'email' ? 'email' : 'overview');
   }, [initialTab, lead?.id]);
 
   useEffect(() => {
     setCopyStatus('');
   }, [lead?.id, activeTab]);
 
-  const hasWebsite = lead.enrichmentStatus === 'enriched' && Boolean(lead.website);
   const isEnriching = enrichingLeadId === lead.id;
   const isGeneratingEmail = generatingLeadId === lead.id;
-  const enrichmentDiagnostics = lead.enrichment?.diagnostics;
-  const pipelineStageLabel = enrichmentDiagnostics?.reason === 'missing_website'
-    ? 'Place Details enriched, but no website was available to analyze'
-    : lead.enrichmentStatus === 'enriched'
-      ? 'Fully enriched with Place Details and website analysis'
-      : 'Lightweight lead from cheap search-stage scoring only';
-  const generationModeLabel = lead.generationMode === 'generic_template'
-    ? 'Reusable generic template'
-    : lead.generationMode === 'prompt_gemini'
-      ? 'Prompt-driven Gemini'
-      : 'Not generated yet';
-  const geminiUsageLabel = lead.generationMode
-    ? lead.usedGemini
-      ? 'Yes'
-      : 'No'
-    : 'Not generated yet';
+  const services = lead.enrichment?.inferredServices || [];
+  const scoreReasons = getLeadScoreReasons(lead);
+  const engagementEvents = lead.events || [];
+  const pipelineStageLabel = lead.enrichmentStatus === 'enriched'
+    ? 'Enriched and ready for personalized follow-up'
+    : lead.generatedEmail
+      ? 'Draft generated using the lightweight path'
+      : 'Queued for enrichment or draft generation';
 
   const handleCopyHtml = async () => {
     if (!lead.generatedEmailHtml) {
@@ -52,11 +70,11 @@ function EmailModal({ lead, initialTab = 'profile', enrichingLeadId = '', genera
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
           <div>
             <h2 className="text-xl font-semibold text-white">{lead.name}</h2>
-            <p className="text-sm text-slate-400">Profile and outreach details</p>
+            <p className="text-sm text-slate-400">Lead insights, engagement events, and draft details</p>
           </div>
           <div className="flex items-center gap-2">
             {!lead.generatedEmail ? (
@@ -87,120 +105,83 @@ function EmailModal({ lead, initialTab = 'profile', enrichingLeadId = '', genera
           </div>
         </div>
 
-        <div className="space-y-4 px-6 py-5">
+        <div className="space-y-5 px-6 py-5">
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab('profile')}
-              className={`rounded-lg px-3 py-2 text-sm font-medium transition ${activeTab === 'profile' ? 'bg-brand-600 text-white' : 'border border-slate-700 text-slate-300 hover:border-slate-500 hover:text-white'}`}
-            >
-              Profile
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('email')}
-              disabled={!lead.generatedEmail}
-              className={`rounded-lg px-3 py-2 text-sm font-medium transition ${activeTab === 'email' ? 'bg-brand-600 text-white' : 'border border-slate-700 text-slate-300 hover:border-slate-500 hover:text-white'} disabled:cursor-not-allowed disabled:opacity-50`}
-            >
-              Email
-            </button>
+            {[
+              ['overview', 'Overview'],
+              ['engagement', 'Engagement'],
+              ['email', 'Email'],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setActiveTab(key)}
+                disabled={key === 'email' && !lead.generatedEmail}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition ${activeTab === key ? 'bg-brand-600 text-white' : 'border border-slate-700 text-slate-300 hover:border-slate-500 hover:text-white'} disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
-          {activeTab === 'profile' ? (
-            <>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-xl bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Website</p>
-              {hasWebsite ? (
-                <a href={lead.website} target="_blank" rel="noreferrer" className="mt-2 block break-all text-sm text-brand-100 hover:text-white">
-                  {lead.website}
-                </a>
-              ) : (
-                <p className="mt-2 text-sm text-slate-300">
-                  {lead.enrichmentStatus === 'enriched' ? 'No website found' : 'Website lookup deferred until enrichment'}
-                </p>
-              )}
-            </div>
-            <div className="rounded-xl bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Inferred Services</p>
-              <p className="mt-2 text-sm text-slate-200">{lead.enrichment?.inferredServices?.join(', ') || 'Not available'}</p>
-            </div>
-          </div>
+          {activeTab === 'overview' ? (
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                <InsightCard label="Assigned Variant" value={formatVariantBucket(lead)} helper="This combines the offer experiment with the score tier bucket." />
+                <InsightCard label="Auto-assigned Tone" value={lead.tone || lead.outreachTone || 'Not assigned yet'} helper="Tone is chosen automatically from the lead context and generation path." />
+                <InsightCard label="Processing Strategy" value={getGenerationModeLabel(lead.generationMode)} helper={pipelineStageLabel} />
+              </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-xl bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Address</p>
-              <p className="mt-2 text-sm text-slate-200">{lead.address || 'Not available'}</p>
-            </div>
-            <div className="rounded-xl bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Phone</p>
-              <p className="mt-2 text-sm text-slate-200">{lead.phone || 'Not available'}</p>
-            </div>
-          </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <InsightCard
+                  label="Services detected"
+                  value={services.length ? services.join(', ') : 'No scraped services available yet'}
+                  helper="Services are inferred from the website / Playwright pass when enrichment is available."
+                />
+                <InsightCard
+                  label="Why it scored high"
+                  value={scoreReasons.join(', ')}
+                  helper="These are the strongest input signals currently visible for this lead."
+                />
+              </div>
 
-          <div className="rounded-xl bg-slate-950/60 p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Pipeline Stage</p>
-            <p className="mt-2 text-sm text-slate-200">{pipelineStageLabel}</p>
-          </div>
-
-          <div className="rounded-xl bg-slate-950/60 p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Enrichment Diagnostics</p>
-            <p className="mt-2 text-sm text-slate-200">{enrichmentDiagnostics?.reason || 'No enrichment diagnostics available yet.'}</p>
-            <p className="mt-1 text-sm text-slate-400">{enrichmentDiagnostics?.details || 'Run Enrich Profile to inspect the single-profile enrichment path.'}</p>
-          </div>
-            </>
+              <div className="grid gap-4 md:grid-cols-3">
+                <InsightCard label="Website" value={lead.website || 'No website available'} />
+                <InsightCard label="Phone" value={lead.phone || 'No phone available'} />
+                <InsightCard label="Address" value={lead.address || 'No address available'} />
+              </div>
+            </div>
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-xl bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Offer Variant</p>
-              <p className="mt-2 text-sm text-slate-200">{lead.offerVariant || 'Not generated yet'}</p>
-            </div>
-            <div className="rounded-xl bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Outreach Tone</p>
-              <p className="mt-2 text-sm text-slate-200">{lead.outreachTone || 'Not generated yet'}</p>
-            </div>
-          </div>
+          {activeTab === 'engagement' ? (
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                <InsightCard label="Opens" value={String(lead.opens ?? 0)} helper="Total tracked opens" />
+                <InsightCard label="Clicks" value={String(lead.clicks ?? 0)} helper="Total tracked clicks" />
+                <InsightCard label="Last Activity" value={formatDateTime(lead.lastActivityAt)} helper="Most recent recorded open or click event" />
+              </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-xl bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Generation Mode</p>
-              <p className="mt-2 text-sm text-slate-200">{generationModeLabel}</p>
-            </div>
-            <div className="rounded-xl bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Used Gemini</p>
-              <p className="mt-2 text-sm text-slate-200">{geminiUsageLabel}</p>
-            </div>
-            <div className="rounded-xl bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Template Source</p>
-              <p className="mt-2 break-all text-sm text-slate-200">{lead.templatePath || 'Not applicable'}</p>
-            </div>
-          </div>
-
-          <div className="rounded-xl bg-slate-950/60 p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Gemini Diagnostics</p>
-            <p className="mt-2 text-sm text-slate-200">{lead.geminiReason || 'Not generated yet'}</p>
-            <p className="mt-1 text-sm text-slate-400">{lead.geminiDetails || 'No Gemini diagnostics available yet.'}</p>
-          </div>
-
-          {!lead.generatedEmail && activeTab === 'profile' ? (
-            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/40 p-4">
-              <p className="text-sm text-slate-300">No email draft has been generated for this lead yet.</p>
-              <button
-                type="button"
-                onClick={() => onGenerateEmail?.(lead, 'email')}
-                disabled={isGeneratingEmail}
-                className="mt-3 rounded-lg border border-brand-500/40 px-3 py-2 text-sm text-brand-100 transition hover:border-brand-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isGeneratingEmail ? 'Generating Email...' : 'Generate Email'}
-              </button>
+              <div className="rounded-xl bg-slate-950/60 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Engagement events</p>
+                <div className="mt-3 space-y-3">
+                  {engagementEvents.length ? engagementEvents.map((event, index) => (
+                    <div key={`${event.type}-${event.timestamp}-${index}`} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm text-slate-200">
+                      <span className="capitalize">{event.type}</span>
+                      <span className="text-slate-400">{formatDateTime(event.timestamp)}</span>
+                    </div>
+                  )) : <div className="rounded-xl border border-dashed border-slate-700 px-4 py-6 text-sm text-slate-400">No engagement events recorded yet.</div>}
+                </div>
+              </div>
             </div>
           ) : null}
 
           {activeTab === 'email' ? (
             <div className="rounded-xl bg-slate-950/60 p-4">
               <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Generated Email</p>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Generated Email</p>
+                  <p className="mt-1 text-sm text-slate-400">The profile view owns email access so reps stay in a single lead context.</p>
+                </div>
                 <div className="flex items-center gap-3">
                   {copyStatus ? <span className="text-xs text-slate-400">{copyStatus}</span> : null}
                   <button

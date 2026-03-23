@@ -1,3 +1,8 @@
+const enrichmentLabels = {
+  enriched: 'Enriched only',
+  not_enriched: 'Non-enriched only',
+};
+
 function LeadFilterBar({ filters, options, onChange }) {
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -23,10 +28,10 @@ function LeadFilterBar({ filters, options, onChange }) {
       </label>
 
       <label className="space-y-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Enrichment level</span>
+        <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Enriched</span>
         <select name="enrichmentLevel" value={filters.enrichmentLevel} onChange={handleChange} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-brand-500">
-          <option value="all">All enrichment levels</option>
-          {options.enrichmentLevels.map((level) => <option key={level} value={level}>{level}</option>)}
+          <option value="all">All leads</option>
+          {options.enrichmentLevels.map((level) => <option key={level} value={level}>{enrichmentLabels[level] || level}</option>)}
         </select>
       </label>
 

@@ -1,26 +1,59 @@
 import SectionPanel from '../components/dashboard/SectionPanel.jsx';
 import StatCard from '../components/dashboard/StatCard.jsx';
-import VariantComparisonTable from '../components/dashboard/VariantComparisonTable.jsx';
-import MetricBarChart from '../components/dashboard/MetricBarChart.jsx';
-import InsightList from '../components/dashboard/InsightList.jsx';
-import { getKpiCards } from '../utils/dashboardMetrics.js';
+import {
+  formatCurrency,
+  formatNumber,
+  formatPercent,
+  getOverviewKpiCards,
+} from '../utils/dashboardMetrics.js';
+
+const variantNameMap = {
+  A: 'Flexible Billing',
+  B: 'Fast Delivery',
+};
+
+function formatComparisonValue(metric, value) {
+  if (metric === 'Leads') {
+    return formatNumber(value);
+  }
+
+  if (metric.includes('Cost')) {
+    return formatCurrency(value);
+  }
+
+  return formatPercent(value);
+}
+
+function InsightCard({ title, children }) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{title}</p>
+      <div className="mt-3 space-y-2">{children}</div>
+    </div>
+  );
+}
 
 function CampaignOverviewPage({ overview, draftedLeadCount }) {
-  const kpiCards = getKpiCards(overview);
+  const kpiCards = getOverviewKpiCards(overview);
+  const comparisonRows = overview?.abPerformance?.comparisonRows || [];
+  const winner = overview?.abPerformance?.winner;
+  const bestScoreRange = overview?.segmentInsights?.bestScoreRange;
+  const bestCity = overview?.segmentInsights?.bestCity;
+  const enrichmentImpact = overview?.segmentInsights?.enrichmentImpact;
 
   return (
     <div className="space-y-6">
       <SectionPanel
-        eyebrow="Executive view"
-        title="Campaign health and decision signals"
-        description="This page focuses on campaign quality, A/B performance, and which lead segments are most likely to respond."
+        eyebrow="Decision layer"
+        title="Campaign overview"
+        description="This page is built to answer two questions fast: where to double down and what to change next."
       >
         <div className="mb-5 rounded-2xl border border-brand-500/20 bg-brand-500/10 p-4 text-sm text-brand-100">
           {draftedLeadCount
-            ? `${draftedLeadCount} drafted leads are currently feeding the campaign metrics below.`
-            : 'Generate a few tracked drafts to populate campaign metrics, A/B comparisons, and response segments.'}
+            ? `${draftedLeadCount} processed leads are currently feeding these campaign decisions.`
+            : 'Generate tracked drafts to unlock campaign recommendations, winner detection, and ROI insights.'}
         </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {kpiCards.map((card) => (
             <StatCard key={card.label} label={card.label} value={card.value} helper={card.helper} />
           ))}
@@ -28,25 +61,92 @@ function CampaignOverviewPage({ overview, draftedLeadCount }) {
       </SectionPanel>
 
       <SectionPanel
-        eyebrow="Most important section"
-        title="A/B performance by offer variant"
-        description="Compare which message strategy is producing opens, clicks, and efficient downstream engagement."
+        eyebrow="A/B testing"
+        title="Variant performance and winner detection"
+        description="This section is intentionally opinionated: it makes the experiment winner obvious instead of leaving you to infer it."
       >
-        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-          <VariantComparisonTable variants={overview?.abPerformance?.variants || []} replyNote={overview?.abPerformance?.notes?.replies || ''} />
+        <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
+          <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-800 text-left">
+                <thead className="bg-slate-950 text-xs uppercase tracking-wide text-slate-400">
+                  <tr>
+                    <th className="px-4 py-3">Metric</th>
+                    <th className="px-4 py-3">Variant A</th>
+                    <th className="px-4 py-3">Variant B</th>
+                    <th className="px-4 py-3">Winner</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800 text-sm text-slate-200">
+                  {comparisonRows.map((row) => (
+                    <tr key={row.metric}>
+                      <td className="px-4 py-4 font-medium text-white">{row.metric}</td>
+                      <td className="px-4 py-4">{formatComparisonValue(row.metric, row.variantA)}</td>
+                      <td className="px-4 py-4">{formatComparisonValue(row.metric, row.variantB)}</td>
+                      <td className="px-4 py-4">{row.winner === '—' ? '—' : `Variant ${row.winner}`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {overview?.abPerformance?.notes?.replies ? (
+              <div className="border-t border-slate-800 px-4 py-3 text-xs text-slate-400">
+                {overview.abPerformance.notes.replies}
+              </div>
+            ) : null}
+          </div>
+
           <div className="grid gap-4">
-            <MetricBarChart title="CTR by variant" subtitle="Unique clicks / drafted leads" data={overview?.abPerformance?.charts?.ctrByVariant || []} colorClassName="bg-sky-400" />
-            <MetricBarChart title="Open rate by variant" subtitle="Unique opens / drafted leads" data={overview?.abPerformance?.charts?.openRateByVariant || []} colorClassName="bg-emerald-500" />
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Winner callout</p>
+              <p className="mt-3 text-2xl font-semibold text-white">
+                {winner?.variant ? `Winning Variant: ${winner.variant} (${variantNameMap[winner.variant]})` : 'Winning Variant: Not enough data yet'}
+              </p>
+              <p className="mt-3 text-sm text-emerald-100">
+                {winner?.variant
+                  ? `+${winner.ctrLiftPercent}% higher CTR • ${winner.costPerClickReductionPercent}% lower cost per click`
+                  : 'Generate more tracked drafts to create a reliable decision signal.'}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Recommended action</p>
+              <div className="mt-3 space-y-3 text-sm text-slate-200">
+                {(overview?.recommendations || []).map((recommendation) => (
+                  <div key={recommendation} className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3">
+                    {recommendation}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </SectionPanel>
 
       <SectionPanel
         eyebrow="Segment intelligence"
-        title="Where the campaign is actually landing"
-        description="Use segment winners to guide territory selection, enrichment investment, and which cohorts deserve more personalization."
+        title="Where the campaign is actually working"
+        description="Only three segment cuts matter here: quality band, geography, and whether enrichment is actually paying off."
       >
-        <InsightList insights={overview?.segmentInsights} />
+        <div className="grid gap-4 xl:grid-cols-3">
+          <InsightCard title="Best performing segment">
+            <p className="text-lg font-semibold text-white">Score Range: {bestScoreRange?.label || 'Not enough tracked data yet'}</p>
+            <p className="text-sm text-slate-300">CTR: {formatPercent(bestScoreRange?.ctr)}</p>
+            <p className="text-sm text-slate-400">{bestScoreRange?.insight || 'No score-range insight available yet.'}</p>
+          </InsightCard>
+
+          <InsightCard title="Best geography">
+            <p className="text-lg font-semibold text-white">City: {bestCity?.label || 'Not enough tracked data yet'}</p>
+            <p className="text-sm text-slate-300">CTR: {formatPercent(bestCity?.ctr)}</p>
+            <p className="text-sm text-slate-400">{bestCity?.insight || 'No geographic insight available yet.'}</p>
+          </InsightCard>
+
+          <InsightCard title="Enrichment impact">
+            <p className="text-sm text-slate-300">Enriched CTR: {formatPercent(enrichmentImpact?.enrichedCtr)}</p>
+            <p className="text-sm text-slate-300">Non-enriched CTR: {formatPercent(enrichmentImpact?.nonEnrichedCtr)}</p>
+            <p className="text-sm text-slate-400">{enrichmentImpact?.insight || 'No enrichment impact signal available yet.'}</p>
+          </InsightCard>
+        </div>
       </SectionPanel>
     </div>
   );

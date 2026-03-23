@@ -1,12 +1,10 @@
-Subject: Reliable parts and cash flow for {{businessName}}
+Subject: Helping {{businessName}} keep bays turning
 
-Hi,
+Sourcing parts shouldn't slow your shop down or strain your cash flow. At {{companyName}}, we help local shops in {{location}} stay on schedule with a more practical approach to parts.
 
-I’m reaching out from {{companyName}} to see if we can help support {{businessName}} in {{location}}. We help local shops source parts reliably to keep jobs moving through your bays without delays.
+To help you take on more work without tying up capital, we offer flexible billing where you pay after the job is completed. It keeps your bays moving and your margins strong.
 
-To help your cash flow, we offer flexible billing where you pay after the job is finished rather than upfront. This reduces pressure on your working capital, making it easier to take on more repairs.
-
-Are you open to a brief chat about how we can help?
+Would you be open to a quick conversation about your current parts sourcing?
 
 Best,
 {{companyName}}

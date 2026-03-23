@@ -232,6 +232,8 @@ const summarizeRows = (rows) => {
     result.totalCost += lead.estimatedCost;
     return result;
   }, createEmptyAggregate('summary'));
+  const engagedLeads = rows.filter((lead) => lead.uniqueOpens > 0 || lead.uniqueClicks > 0).length;
+  const totalEngagements = aggregate.totalOpens + aggregate.totalClicks;
 
   const modeledReplies = getModeledReplies({
     draftedLeads: aggregate.leads,
@@ -246,6 +248,11 @@ const summarizeRows = (rows) => {
     openRate: toPercent(aggregate.uniqueOpens, aggregate.leads),
     ctr: toPercent(aggregate.uniqueClicks, aggregate.leads),
     ctor: toPercent(aggregate.uniqueClicks, aggregate.uniqueOpens),
+    costPerClick: roundMetric(divide(aggregate.totalCost, aggregate.uniqueClicks), 2),
+    costPerEngagement: roundMetric(divide(aggregate.totalCost, totalEngagements), 2),
+    engagementRate: toPercent(engagedLeads, aggregate.leads),
+    engagedLeads,
+    totalEngagements,
     modeledReplies,
     modeledReplyRate: toPercent(modeledReplies, aggregate.leads),
   };
@@ -293,6 +300,97 @@ const rankSegment = (rows, getLabel, minimumSampleSize = 1) => {
   return ranked[0] || null;
 };
 
+const getMetricWinner = ({ left, right, higherIsBetter = true }) => {
+  if (left === right) {
+    return '—';
+  }
+
+  if (higherIsBetter) {
+    return left > right ? 'A' : 'B';
+  }
+
+  return left < right ? 'A' : 'B';
+};
+
+const getVariantWinner = (variantSummaries) => {
+  const variantA = variantSummaries.find((variant) => variant.variant === 'A');
+  const variantB = variantSummaries.find((variant) => variant.variant === 'B');
+
+  if (!variantA || !variantB || (!variantA.leads && !variantB.leads)) {
+    return null;
+  }
+
+  const scoreA = variantA.ctr * 0.5 + variantA.openRate * 0.2 + variantA.engagementRate * 0.2 - variantA.costPerClick * 10;
+  const scoreB = variantB.ctr * 0.5 + variantB.openRate * 0.2 + variantB.engagementRate * 0.2 - variantB.costPerClick * 10;
+  const winner = scoreA === scoreB ? (variantA.ctr >= variantB.ctr ? variantA : variantB) : (scoreA > scoreB ? variantA : variantB);
+  const loser = winner.variant === 'A' ? variantB : variantA;
+  const ctrLiftPercent = loser.ctr > 0 ? roundMetric(((winner.ctr - loser.ctr) / loser.ctr) * 100, 0) : roundMetric(winner.ctr - loser.ctr, 1);
+  const costPerClickReductionPercent = loser.costPerClick > 0 ? roundMetric(((loser.costPerClick - winner.costPerClick) / loser.costPerClick) * 100, 0) : 0;
+
+  return {
+    variant: winner.variant,
+    label: winner.variant === 'A' ? 'Flexible Billing' : 'Fast Delivery',
+    ctrLiftPercent,
+    costPerClickReductionPercent,
+  };
+};
+
+const buildOverviewRecommendations = ({ winner, bestCity, enrichmentImpact }) => {
+  const recommendations = [];
+
+  if (winner?.variant) {
+    recommendations.push(`Increase allocation to Variant ${winner.variant}.`);
+  }
+
+  if (bestCity?.label && bestCity.ctr > 0) {
+    recommendations.push(`Expand targeting in ${bestCity.label} where engagement is strongest.`);
+  }
+
+  if ((enrichmentImpact?.uplift || 0) > 0) {
+    recommendations.push('Apply enrichment to the top 30 leads instead of 20.');
+  }
+
+  if (!recommendations.length) {
+    recommendations.push('Collect more tracked drafts before changing allocation or enrichment thresholds.');
+  }
+
+  return recommendations;
+};
+
+const getLeadEventMap = (leadIds) => {
+  const normalizedLeadIds = [...new Set((leadIds || []).filter(Boolean))];
+
+  if (!normalizedLeadIds.length) {
+    return new Map();
+  }
+
+  const db = getDatabase();
+  const placeholders = normalizedLeadIds.map(() => '?').join(', ');
+  const events = db.prepare(`
+    SELECT lead_id, event_type, timestamp
+    FROM events
+    WHERE lead_id IN (${placeholders})
+    ORDER BY timestamp DESC
+  `).all(...normalizedLeadIds);
+
+  return events.reduce((eventMap, event) => {
+    if (!eventMap.has(event.lead_id)) {
+      eventMap.set(event.lead_id, []);
+    }
+
+    const items = eventMap.get(event.lead_id);
+
+    if (items.length < 5) {
+      items.push({
+        type: event.event_type,
+        timestamp: event.timestamp,
+      });
+    }
+
+    return eventMap;
+  }, new Map());
+};
+
 const getTrackedLeadFacts = () => {
   const db = getDatabase();
   const rows = db.prepare(`
@@ -313,6 +411,7 @@ const getTrackedLeadFacts = () => {
       l.outreach_tone,
       e.email_text,
       e.created_at AS drafted_at,
+      MAX(ev.timestamp) AS last_activity_at,
       COALESCE(SUM(CASE WHEN ev.event_type = 'open' THEN 1 ELSE 0 END), 0) AS total_opens,
       COALESCE(SUM(CASE WHEN ev.event_type = 'click' THEN 1 ELSE 0 END), 0) AS total_clicks,
       MAX(CASE WHEN ev.event_type = 'open' THEN 1 ELSE 0 END) AS unique_open,
@@ -351,6 +450,7 @@ const getTrackedLeadFacts = () => {
       estimatedCost: roundMetric(row.estimated_cost, 2),
       updatedAt: row.updated_at || '',
       draftedAt: row.drafted_at || '',
+      lastActivityAt: row.last_activity_at || row.drafted_at || row.updated_at || '',
       rating: roundMetric(row.rating, 1),
       reviewCount: Math.max(0, Math.round(toNumber(row.review_count, 0))),
       distanceMiles: row.distance_miles === null || row.distance_miles === undefined ? null : roundMetric(row.distance_miles, 1),
@@ -379,6 +479,295 @@ const getTrackedLeadFacts = () => {
       processingTimeEstimateSeconds: getProcessingTimeEstimateSeconds(normalizedLead),
     };
   });
+};
+
+export const getDashboardOverview = () => {
+  const rows = getTrackedLeadFacts();
+  const totals = summarizeRows(rows);
+  const averageLeadScore = roundMetric(divide(rows.reduce((sum, row) => sum + row.score, 0), rows.length), 1);
+  const enrichedLeads = rows.filter((row) => row.enrichmentLevel !== 'none').length;
+  const variantSummaries = ['A', 'B'].map((variant) => {
+    const variantRows = rows.filter((row) => row.variant === variant);
+    const summary = summarizeRows(variantRows);
+
+    return {
+      variant,
+      leads: summary.leads,
+      uniqueOpens: summary.uniqueOpens,
+      totalOpens: summary.totalOpens,
+      uniqueClicks: summary.uniqueClicks,
+      totalClicks: summary.totalClicks,
+      openRate: summary.openRate,
+      ctr: summary.ctr,
+      ctor: summary.ctor,
+      costPerLead: summary.costPerLead,
+      costPerClick: summary.costPerClick,
+      costPerEngagement: summary.costPerEngagement,
+      engagementRate: summary.engagementRate,
+      totalCost: summary.totalCost,
+      replies: summary.modeledReplies,
+      repliesModeled: true,
+    };
+  });
+  const bestPerformingCity = rankSegment(rows, (row) => row.city);
+  const bestPerformingScoreRange = rankSegment(rows, (row) => row.scoreBand);
+  const enrichedRows = rows.filter((row) => row.enrichmentLevel !== 'none');
+  const nonEnrichedRows = rows.filter((row) => row.enrichmentLevel === 'none');
+  const enrichedSummary = summarizeRows(enrichedRows);
+  const nonEnrichedSummary = summarizeRows(nonEnrichedRows);
+  const winner = getVariantWinner(variantSummaries);
+  const enrichmentImpact = {
+    enrichedCtr: enrichedSummary.ctr,
+    nonEnrichedCtr: nonEnrichedSummary.ctr,
+    uplift: roundMetric(enrichedSummary.ctr - nonEnrichedSummary.ctr, 1),
+  };
+  const recommendations = buildOverviewRecommendations({
+    winner,
+    bestCity: bestPerformingCity,
+    enrichmentImpact,
+  });
+
+  return {
+    kpis: {
+      totalLeads: totals.leads,
+      leadsProcessed: totals.leads,
+      enrichedLeads,
+      averageLeadScore,
+      totalCost: totals.totalCost,
+      costPerLead: totals.costPerLead,
+      costPerClick: totals.costPerClick,
+      costPerEngagement: totals.costPerEngagement,
+      overallCtr: totals.ctr,
+      openRate: totals.openRate,
+      ctor: totals.ctor,
+    },
+    abPerformance: {
+      variants: variantSummaries,
+      comparisonRows: [
+        {
+          metric: 'Leads',
+          variantA: variantSummaries.find((variant) => variant.variant === 'A')?.leads || 0,
+          variantB: variantSummaries.find((variant) => variant.variant === 'B')?.leads || 0,
+          winner: getMetricWinner({
+            left: variantSummaries.find((variant) => variant.variant === 'A')?.leads || 0,
+            right: variantSummaries.find((variant) => variant.variant === 'B')?.leads || 0,
+          }),
+        },
+        {
+          metric: 'CTR',
+          variantA: variantSummaries.find((variant) => variant.variant === 'A')?.ctr || 0,
+          variantB: variantSummaries.find((variant) => variant.variant === 'B')?.ctr || 0,
+          winner: getMetricWinner({
+            left: variantSummaries.find((variant) => variant.variant === 'A')?.ctr || 0,
+            right: variantSummaries.find((variant) => variant.variant === 'B')?.ctr || 0,
+          }),
+        },
+        {
+          metric: 'Open Rate',
+          variantA: variantSummaries.find((variant) => variant.variant === 'A')?.openRate || 0,
+          variantB: variantSummaries.find((variant) => variant.variant === 'B')?.openRate || 0,
+          winner: getMetricWinner({
+            left: variantSummaries.find((variant) => variant.variant === 'A')?.openRate || 0,
+            right: variantSummaries.find((variant) => variant.variant === 'B')?.openRate || 0,
+          }),
+        },
+        {
+          metric: 'Cost / Click',
+          variantA: variantSummaries.find((variant) => variant.variant === 'A')?.costPerClick || 0,
+          variantB: variantSummaries.find((variant) => variant.variant === 'B')?.costPerClick || 0,
+          winner: getMetricWinner({
+            left: variantSummaries.find((variant) => variant.variant === 'A')?.costPerClick || 0,
+            right: variantSummaries.find((variant) => variant.variant === 'B')?.costPerClick || 0,
+            higherIsBetter: false,
+          }),
+        },
+        {
+          metric: 'Engagement %',
+          variantA: variantSummaries.find((variant) => variant.variant === 'A')?.engagementRate || 0,
+          variantB: variantSummaries.find((variant) => variant.variant === 'B')?.engagementRate || 0,
+          winner: getMetricWinner({
+            left: variantSummaries.find((variant) => variant.variant === 'A')?.engagementRate || 0,
+            right: variantSummaries.find((variant) => variant.variant === 'B')?.engagementRate || 0,
+          }),
+        },
+      ],
+      winner,
+      notes: {
+        replies: 'Replies are modeled from downstream click and open intensity until direct reply tracking is implemented.',
+      },
+    },
+    segmentInsights: {
+      bestScoreRange: {
+        label: bestPerformingScoreRange?.label || 'Not enough tracked data yet',
+        ctr: bestPerformingScoreRange?.ctr || 0,
+        insight: 'High-quality shops respond better to personalized outreach.',
+      },
+      bestCity: {
+        label: bestPerformingCity?.label || 'Not enough tracked data yet',
+        ctr: bestPerformingCity?.ctr || 0,
+        insight: 'Higher density and stronger local trust signals are producing better engagement.',
+      },
+      enrichmentImpact: {
+        ...enrichmentImpact,
+        insight: enrichmentImpact.uplift > 0
+          ? `Enrichment improves CTR by ${enrichmentImpact.uplift} percentage points.`
+          : 'Enrichment has not yet produced a measurable CTR lift.',
+      },
+    },
+    recommendations,
+  };
+};
+
+export const getDashboardLeads = () => {
+  const rows = getTrackedLeadFacts();
+  const eventMap = getLeadEventMap(rows.map((row) => row.id));
+
+  return {
+    rows: rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      city: row.city,
+      score: row.score,
+      variant: row.variant,
+      tier: row.tier,
+      status: row.status,
+      opens: row.totalOpens,
+      clicks: row.totalClicks,
+      uniqueOpens: row.uniqueOpens,
+      uniqueClicks: row.uniqueClicks,
+      cost: row.estimatedCost,
+      enriched: row.enrichmentLevel !== 'none',
+      enrichmentLevel: row.enrichmentLevel,
+      tone: row.outreachTone,
+      emailPreview: row.emailPreview,
+      generationMode: row.generationMode,
+      rating: row.rating,
+      reviewCount: row.reviewCount,
+      distanceMiles: row.distanceMiles,
+      hasWebsite: row.hasWebsite,
+      updatedAt: row.updatedAt,
+      draftedAt: row.draftedAt,
+      lastActivityAt: row.lastActivityAt,
+      events: eventMap.get(row.id) || [],
+    })),
+    filters: {
+      variants: [...new Set(rows.map((row) => row.variant))].filter(Boolean).sort(),
+      cities: [...new Set(rows.map((row) => row.city))].filter(Boolean).sort((left, right) => left.localeCompare(right)),
+      enrichmentLevels: ['enriched', 'not_enriched'],
+      scoreRange: {
+        min: rows.length ? Math.min(...rows.map((row) => row.score)) : 0,
+        max: rows.length ? Math.max(...rows.map((row) => row.score)) : 100,
+      },
+    },
+  };
+};
+
+export const getSystemPerformance = () => {
+  const rows = getTrackedLeadFacts();
+  const totals = summarizeRows(rows);
+  const costBreakdown = rows.reduce((aggregate, row) => {
+    aggregate.googlePlaces += row.costBreakdown.googlePlaces;
+    aggregate.gemini += row.costBreakdown.gemini;
+    aggregate.scraping += row.costBreakdown.scraping;
+    return aggregate;
+  }, {
+    googlePlaces: 0,
+    gemini: 0,
+    scraping: 0,
+  });
+  const enrichmentDistribution = rows.reduce((distribution, row) => {
+    distribution[row.enrichmentLevel] += 1;
+    return distribution;
+  }, {
+    full: 0,
+    partial: 0,
+    none: 0,
+  });
+  const leadsEnriched = rows.filter((row) => row.enrichmentLevel !== 'none').length;
+  const estimatedGeminiCalls = rows.filter((row) => row.generationMode === 'full_enrichment').length + new Set(rows.filter((row) => row.generationMode === 'template').map((row) => row.variant)).size;
+  const totalApiCalls = rows.reduce((sum, row) => sum + row.apiCallsEstimate, 0);
+  const averageProcessingTime = roundMetric(divide(rows.reduce((sum, row) => sum + row.processingTimeEstimateSeconds, 0), rows.length), 1);
+  const fullPersonalizationBaseline = rows.length * 0.62;
+  const enrichedRows = rows.filter((row) => row.enrichmentLevel !== 'none');
+  const remainingRows = rows.filter((row) => row.enrichmentLevel === 'none');
+  const enrichedSummary = summarizeRows(enrichedRows);
+  const remainingSummary = summarizeRows(remainingRows);
+  const scoreBandMap = new Map();
+
+  rows.forEach((row) => {
+    if (!scoreBandMap.has(row.scoreBand)) {
+      scoreBandMap.set(row.scoreBand, []);
+    }
+
+    scoreBandMap.get(row.scoreBand).push(row);
+  });
+
+  return {
+    coreMetrics: {
+      leadsProcessed: rows.length,
+      leadsEnriched,
+      totalGeminiCalls: {
+        value: estimatedGeminiCalls,
+        estimated: true,
+      },
+      averageApiCallsPerLead: {
+        value: roundMetric(divide(totalApiCalls, rows.length), 1),
+        estimated: true,
+      },
+      averageProcessingTimeSeconds: {
+        value: averageProcessingTime,
+        estimated: true,
+      },
+      costPerClick: totals.costPerClick,
+      totalCost: totals.totalCost,
+      costSavedViaTiering: roundMetric(Math.max(0, fullPersonalizationBaseline - totals.totalCost), 2),
+    },
+    pipelineMetrics: {
+      leadsProcessed: rows.length,
+      leadsEnriched,
+      geminiCalls: estimatedGeminiCalls,
+      apiCallsPerLead: roundMetric(divide(totalApiCalls, rows.length), 1),
+      averageProcessingTimeSeconds: averageProcessingTime,
+    },
+    visuals: {
+      costVsLeadScore: [...scoreBandMap.entries()].map(([label, scoreRows]) => {
+        const summary = summarizeRows(scoreRows);
+
+        return {
+          id: label,
+          label,
+          score: roundMetric(divide(scoreRows.reduce((sum, row) => sum + row.score, 0), scoreRows.length), 1),
+          cost: roundMetric(divide(scoreRows.reduce((sum, row) => sum + row.estimatedCost, 0), scoreRows.length), 2),
+          variant: label,
+          ctr: summary.ctr,
+        };
+      }),
+      enrichmentDistribution: [
+        { label: 'Full enrichment', value: enrichmentDistribution.full },
+        { label: 'Partial', value: enrichmentDistribution.partial },
+        { label: 'None', value: enrichmentDistribution.none },
+      ],
+      costBreakdown: [
+        { label: 'Google Places', value: roundMetric(costBreakdown.googlePlaces, 2) },
+        { label: 'Playwright', value: roundMetric(costBreakdown.scraping, 2) },
+        { label: 'Gemini', value: roundMetric(costBreakdown.gemini, 2) },
+        { label: 'Total', value: roundMetric(costBreakdown.googlePlaces + costBreakdown.scraping + costBreakdown.gemini, 2) },
+      ],
+    },
+    enrichmentEfficiency: {
+      enrichedCtr: enrichedSummary.ctr,
+      remainingCtr: remainingSummary.ctr,
+      costDelta: roundMetric(enrichedSummary.costPerLead - remainingSummary.costPerLead, 2),
+    },
+    processingStrategy: [
+      'Top enriched leads → Full enrichment + Gemini personalization',
+      'Remaining leads → Template-based generation with lower-cost processing',
+    ],
+    notes: [
+      'Gemini call counts are estimated from personalized drafts plus one reusable template-generation pass per low-score variant.',
+      'Processing time and API call counts are centralized approximations derived from each lead path until provider-level telemetry is persisted.',
+    ],
+  };
 };
 
 export const initializeTrackingDatabase = async () => {
@@ -615,177 +1004,6 @@ export const recordTrackingEvent = ({ leadId, emailId, eventType, variant, gener
     userAgent,
     ipAddress,
   );
-};
-
-export const getDashboardOverview = () => {
-  const rows = getTrackedLeadFacts();
-  const totals = summarizeRows(rows);
-  const averageLeadScore = roundMetric(divide(rows.reduce((sum, row) => sum + row.score, 0), rows.length), 1);
-  const enrichedLeads = rows.filter((row) => row.enrichmentLevel !== 'none').length;
-  const variantSummaries = ['A', 'B'].map((variant) => {
-    const variantRows = rows.filter((row) => row.variant === variant);
-    const summary = summarizeRows(variantRows);
-
-    return {
-      variant,
-      leads: summary.leads,
-      uniqueOpens: summary.uniqueOpens,
-      totalOpens: summary.totalOpens,
-      uniqueClicks: summary.uniqueClicks,
-      totalClicks: summary.totalClicks,
-      openRate: summary.openRate,
-      ctr: summary.ctr,
-      ctor: summary.ctor,
-      costPerLead: summary.costPerLead,
-      totalCost: summary.totalCost,
-      replies: summary.modeledReplies,
-      repliesModeled: true,
-    };
-  });
-  const topPerformingSegment = rankSegment(rows, (row) => `${row.ratingBand} rated • ${row.distanceBand}`);
-  const bestPerformingCity = rankSegment(rows, (row) => row.city);
-  const bestPerformingScoreRange = rankSegment(rows, (row) => row.scoreBand);
-  const bestPerformingReviewSegment = rankSegment(rows, (row) => row.ratingBand);
-
-  return {
-    kpis: {
-      totalLeads: totals.leads,
-      enrichedLeads,
-      averageLeadScore,
-      totalCost: totals.totalCost,
-      costPerLead: totals.costPerLead,
-      overallCtr: totals.ctr,
-      openRate: totals.openRate,
-    },
-    abPerformance: {
-      variants: variantSummaries,
-      charts: {
-        ctrByVariant: variantSummaries.map((variant) => ({ label: variant.variant, value: variant.ctr })),
-        openRateByVariant: variantSummaries.map((variant) => ({ label: variant.variant, value: variant.openRate })),
-      },
-      notes: {
-        replies: 'Replies are modeled from downstream click and open intensity until direct reply tracking is implemented.',
-      },
-    },
-    segmentInsights: {
-      topPerformingSegment,
-      bestPerformingCity,
-      bestPerformingLeadScoreRange: bestPerformingScoreRange,
-      bestPerformingReviewSegment,
-    },
-  };
-};
-
-export const getDashboardLeads = () => {
-  const rows = getTrackedLeadFacts();
-
-  return {
-    rows: rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      city: row.city,
-      score: row.score,
-      variant: row.variant,
-      tier: row.tier,
-      status: row.status,
-      opens: row.totalOpens,
-      clicks: row.totalClicks,
-      uniqueOpens: row.uniqueOpens,
-      uniqueClicks: row.uniqueClicks,
-      cost: row.estimatedCost,
-      enriched: row.enrichmentLevel !== 'none',
-      enrichmentLevel: row.enrichmentLevel,
-      tone: row.outreachTone,
-      emailPreview: row.emailPreview,
-      generationMode: row.generationMode,
-      rating: row.rating,
-      reviewCount: row.reviewCount,
-      distanceMiles: row.distanceMiles,
-      hasWebsite: row.hasWebsite,
-      updatedAt: row.updatedAt,
-      draftedAt: row.draftedAt,
-    })),
-    filters: {
-      variants: [...new Set(rows.map((row) => row.variant))].filter(Boolean).sort(),
-      cities: [...new Set(rows.map((row) => row.city))].filter(Boolean).sort((left, right) => left.localeCompare(right)),
-      enrichmentLevels: ['full', 'partial', 'none'],
-      scoreRange: {
-        min: rows.length ? Math.min(...rows.map((row) => row.score)) : 0,
-        max: rows.length ? Math.max(...rows.map((row) => row.score)) : 100,
-      },
-    },
-  };
-};
-
-export const getSystemPerformance = () => {
-  const rows = getTrackedLeadFacts();
-  const totals = summarizeRows(rows);
-  const costBreakdown = rows.reduce((aggregate, row) => {
-    aggregate.googlePlaces += row.costBreakdown.googlePlaces;
-    aggregate.gemini += row.costBreakdown.gemini;
-    aggregate.scraping += row.costBreakdown.scraping;
-    return aggregate;
-  }, {
-    googlePlaces: 0,
-    gemini: 0,
-    scraping: 0,
-  });
-  const enrichmentDistribution = rows.reduce((distribution, row) => {
-    distribution[row.enrichmentLevel] += 1;
-    return distribution;
-  }, {
-    full: 0,
-    partial: 0,
-    none: 0,
-  });
-  const leadsEnriched = rows.filter((row) => row.enrichmentLevel !== 'none').length;
-  const estimatedGeminiCalls = rows.filter((row) => row.generationMode === 'full_enrichment').length + new Set(rows.filter((row) => row.generationMode === 'template').map((row) => row.variant)).size;
-  const totalApiCalls = rows.reduce((sum, row) => sum + row.apiCallsEstimate, 0);
-  const averageProcessingTime = roundMetric(divide(rows.reduce((sum, row) => sum + row.processingTimeEstimateSeconds, 0), rows.length), 1);
-  const fullPersonalizationBaseline = rows.length * 0.62;
-
-  return {
-    coreMetrics: {
-      leadsEnriched,
-      totalGeminiCalls: {
-        value: estimatedGeminiCalls,
-        estimated: true,
-      },
-      averageApiCallsPerLead: {
-        value: roundMetric(divide(totalApiCalls, rows.length), 1),
-        estimated: true,
-      },
-      averageProcessingTimeSeconds: {
-        value: averageProcessingTime,
-        estimated: true,
-      },
-      totalCost: totals.totalCost,
-      costSavedViaTiering: roundMetric(Math.max(0, fullPersonalizationBaseline - totals.totalCost), 2),
-    },
-    visuals: {
-      costVsLeadScore: rows.map((row) => ({
-        id: row.id,
-        label: row.name,
-        score: row.score,
-        cost: row.estimatedCost,
-        variant: row.variant,
-      })),
-      enrichmentDistribution: [
-        { label: 'Full enrichment', value: enrichmentDistribution.full },
-        { label: 'Partial', value: enrichmentDistribution.partial },
-        { label: 'None', value: enrichmentDistribution.none },
-      ],
-      costBreakdown: [
-        { label: 'Google Places', value: roundMetric(costBreakdown.googlePlaces, 2) },
-        { label: 'Gemini', value: roundMetric(costBreakdown.gemini, 2) },
-        { label: 'Scraping', value: roundMetric(costBreakdown.scraping, 2) },
-      ],
-    },
-    notes: [
-      'Gemini call counts are estimated from personalized drafts plus one reusable template-generation pass per low-score variant.',
-      'Processing time and API call counts are centralized approximations derived from each lead path until provider-level telemetry is persisted.',
-    ],
-  };
 };
 
 export const getTrackingPixelBuffer = () => trackingPixelBuffer;

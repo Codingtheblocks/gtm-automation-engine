@@ -7,6 +7,17 @@ function ScatterPlot({ title, subtitle, points = [] }) {
 
   const getX = (score) => padding + (Number(score || 0) / maxScore) * (width - padding * 2);
   const getY = (cost) => height - padding - (Number(cost || 0) / maxCost) * (height - padding * 2);
+  const getColor = (point) => {
+    if (point.variant === 'A') {
+      return '#38bdf8';
+    }
+
+    if (point.variant === 'B') {
+      return '#22c55e';
+    }
+
+    return '#a855f7';
+  };
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
@@ -21,10 +32,10 @@ function ScatterPlot({ title, subtitle, points = [] }) {
               key={point.id}
               cx={getX(point.score)}
               cy={getY(point.cost)}
-              r="5"
-              fill={point.variant === 'B' ? '#22c55e' : '#38bdf8'}
+              r="6"
+              fill={getColor(point)}
             >
-              <title>{`${point.label}: score ${point.score}, cost ${point.cost}`}</title>
+              <title>{`${point.label}: score ${point.score}, cost ${point.cost}, CTR ${Number(point.ctr || 0).toFixed(1)}%`}</title>
             </circle>
           ))}
           <text x={width / 2} y={height - 6} textAnchor="middle" fill="#94a3b8" fontSize="11">Lead Score</text>
@@ -32,8 +43,7 @@ function ScatterPlot({ title, subtitle, points = [] }) {
         </svg>
       </div>
       <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-400">
-        <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-sky-400" />Variant A</span>
-        <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />Variant B</span>
+        <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-violet-500" />Each point = score cohort</span>
       </div>
     </div>
   );
