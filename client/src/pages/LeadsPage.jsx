@@ -24,6 +24,9 @@ function LeadsPage({
   promptSettingsStatus,
   onPromptSettingsChange,
   onSavePromptSettings,
+  syncingHubSpot,
+  hubspotSyncStatus,
+  onSyncAllToHubSpot,
   onClearSavedState,
 }) {
   const [expandedPromptField, setExpandedPromptField] = useState(null);
@@ -170,8 +173,19 @@ function LeadsPage({
       <SectionPanel eyebrow="Persistence" title="Saved lead state" description="Current search results and drafts are still persisted in local storage on this machine.">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <p className="text-sm text-slate-400">Use this to reset the local search workspace without touching tracked campaign analytics stored in SQLite.</p>
-          <button type="button" onClick={onClearSavedState} className="rounded-xl border border-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:text-white">Clear Saved Leads & Drafts</button>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={onSyncAllToHubSpot}
+              disabled={syncingHubSpot}
+              className="rounded-xl border border-brand-500/40 bg-brand-500/10 px-4 py-2 text-sm font-medium text-brand-100 transition hover:border-brand-400 hover:bg-brand-500/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {syncingHubSpot ? 'Syncing All to HubSpot...' : 'Sync All to HubSpot'}
+            </button>
+            <button type="button" onClick={onClearSavedState} className="rounded-xl border border-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:text-white">Clear Saved Leads & Drafts</button>
+          </div>
         </div>
+        {hubspotSyncStatus ? <div className="mt-4 rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-3 text-sm text-brand-100">{hubspotSyncStatus}</div> : null}
       </SectionPanel>
 
       {expandedPromptField ? (

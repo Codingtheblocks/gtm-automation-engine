@@ -114,6 +114,8 @@ function App() {
   const [savingPromptSettings, setSavingPromptSettings] = useState(false);
   const [promptSettingsStatus, setPromptSettingsStatus] = useState('');
   const [manualEventKey, setManualEventKey] = useState('');
+  const [syncingHubSpot, setSyncingHubSpot] = useState(false);
+  const [hubspotSyncStatus, setHubspotSyncStatus] = useState('');
 
   const loadPromptSettings = async () => {
     if (demoMode) {
@@ -550,6 +552,39 @@ function App() {
     }
   };
 
+  const handleSyncAllToHubSpot = async () => {
+    setError('');
+    setHubspotSyncStatus('');
+
+    if (demoMode) {
+      setHubspotSyncStatus('HubSpot sync is unavailable in demo mode because the frontend is not connected to the backend CRM pipeline.');
+      return;
+    }
+
+    setSyncingHubSpot(true);
+
+    try {
+      const response = await fetch(`${LEADS_API_BASE_URL}/sync-hubspot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to sync tracked leads to HubSpot');
+      }
+
+      setHubspotSyncStatus(`Synced ${data.syncedContacts || 0} of ${data.totalLeads || 0} tracked leads to HubSpot • Generated: ${data.generatedEvents || 0} • Opens: ${data.openEvents || 0} • Clicks: ${data.clickEvents || 0}`);
+      await loadDashboardData({ showLoading: false });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSyncingHubSpot(false);
+    }
+  };
+
   const trackedLeadMap = useMemo(
     () => new Map((dashboardData.leads?.rows || []).map((lead) => [lead.id, lead])),
     [dashboardData.leads?.rows],
@@ -641,6 +676,9 @@ function App() {
             promptSettingsStatus={promptSettingsStatus}
             onPromptSettingsChange={handlePromptSettingsChange}
             onSavePromptSettings={handleSavePromptSettings}
+            syncingHubSpot={syncingHubSpot}
+            hubspotSyncStatus={hubspotSyncStatus}
+            onSyncAllToHubSpot={handleSyncAllToHubSpot}
             onClearSavedState={handleClearSavedState}
           />
         );
@@ -649,9 +687,11 @@ function App() {
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 px-4 py-10 text-slate-100">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <header className="space-y-3">
-          <span className="inline-flex rounded-full border border-brand-500/30 bg-brand-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-brand-100">
-            GTM Engineering Demo
-          </span>
+          {demoMode ? (
+            <span className="inline-flex rounded-full border border-brand-500/30 bg-brand-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-brand-100">
+              GTM Engineering Demo
+            </span>
+          ) : null}
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <h1 className="text-4xl font-bold tracking-tight text-white">AI Lead Generation & Outreach System</h1>

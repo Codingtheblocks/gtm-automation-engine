@@ -518,6 +518,7 @@ const getTrackedLeadFacts = () => {
     SELECT
       l.id,
       l.name,
+      l.phone,
       l.city,
       l.score,
       l.variant,
@@ -533,6 +534,7 @@ const getTrackedLeadFacts = () => {
       l.google_places_cost,
       l.gemini_cost,
       l.scraping_cost,
+      l.hubspot_contact_id,
       l.gemini_input_tokens,
       l.gemini_output_tokens,
       e.email_text,
@@ -548,6 +550,7 @@ const getTrackedLeadFacts = () => {
     GROUP BY
       l.id,
       l.name,
+      l.phone,
       l.city,
       l.score,
       l.variant,
@@ -563,6 +566,7 @@ const getTrackedLeadFacts = () => {
       l.google_places_cost,
       l.gemini_cost,
       l.scraping_cost,
+      l.hubspot_contact_id,
       l.gemini_input_tokens,
       l.gemini_output_tokens,
       e.email_text,
@@ -574,6 +578,7 @@ const getTrackedLeadFacts = () => {
     const normalizedLead = {
       id: row.id,
       name: row.name || '',
+      phone: row.phone || '',
       city: row.city || 'Unknown',
       score: roundMetric(row.score, 1),
       variant: normalizeTrackedVariant(row.variant, {
@@ -595,6 +600,7 @@ const getTrackedLeadFacts = () => {
       googlePlacesCost: roundMetric(row.google_places_cost, 6),
       geminiCost: roundMetric(row.gemini_cost, 6),
       scrapingCost: roundMetric(row.scraping_cost, 6),
+      hubspotContactId: row.hubspot_contact_id || '',
       geminiInputTokens: Math.max(0, Math.round(toNumber(row.gemini_input_tokens, 0))),
       geminiOutputTokens: Math.max(0, Math.round(toNumber(row.gemini_output_tokens, 0))),
       emailPreview: String(row.email_text || '').split('\n').find(Boolean) || '',
@@ -786,6 +792,7 @@ export const getDashboardLeads = () => {
       costBreakdown: row.costBreakdown,
       geminiInputTokens: row.geminiInputTokens,
       geminiOutputTokens: row.geminiOutputTokens,
+      hubspotContactId: row.hubspotContactId,
       enriched: row.enrichmentLevel !== 'none',
       enrichmentLevel: row.enrichmentLevel,
       tone: row.outreachTone,
@@ -928,6 +935,7 @@ export const initializeTrackingDatabase = async () => {
     CREATE TABLE IF NOT EXISTS leads (
       id TEXT PRIMARY KEY,
       name TEXT,
+      phone TEXT,
       city TEXT,
       score INTEGER,
       variant TEXT,
@@ -943,6 +951,7 @@ export const initializeTrackingDatabase = async () => {
       google_places_cost REAL DEFAULT 0,
       gemini_cost REAL DEFAULT 0,
       scraping_cost REAL DEFAULT 0,
+      hubspot_contact_id TEXT,
       gemini_input_tokens INTEGER DEFAULT 0,
       gemini_output_tokens INTEGER DEFAULT 0
     );
@@ -986,12 +995,14 @@ export const initializeTrackingDatabase = async () => {
   ensureTableColumn('leads', 'rating', 'REAL DEFAULT 0');
   ensureTableColumn('leads', 'review_count', 'INTEGER DEFAULT 0');
   ensureTableColumn('leads', 'distance_miles', 'REAL');
+  ensureTableColumn('leads', 'phone', 'TEXT');
   ensureTableColumn('leads', 'enrichment_status', "TEXT DEFAULT 'unknown'");
   ensureTableColumn('leads', 'has_website', 'INTEGER DEFAULT 0');
   ensureTableColumn('leads', 'outreach_tone', "TEXT DEFAULT ''");
   ensureTableColumn('leads', 'google_places_cost', 'REAL DEFAULT 0');
   ensureTableColumn('leads', 'gemini_cost', 'REAL DEFAULT 0');
   ensureTableColumn('leads', 'scraping_cost', 'REAL DEFAULT 0');
+  ensureTableColumn('leads', 'hubspot_contact_id', 'TEXT');
   ensureTableColumn('leads', 'gemini_input_tokens', 'INTEGER DEFAULT 0');
   ensureTableColumn('leads', 'gemini_output_tokens', 'INTEGER DEFAULT 0');
 };
@@ -1043,6 +1054,7 @@ export const saveTrackedEmail = ({
     INSERT INTO leads (
       id,
       name,
+      phone,
       city,
       score,
       variant,
@@ -1058,12 +1070,14 @@ export const saveTrackedEmail = ({
       google_places_cost,
       gemini_cost,
       scraping_cost,
+      hubspot_contact_id,
       gemini_input_tokens,
       gemini_output_tokens
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
+      phone = excluded.phone,
       city = excluded.city,
       score = excluded.score,
       variant = excluded.variant,
@@ -1079,11 +1093,13 @@ export const saveTrackedEmail = ({
       google_places_cost = excluded.google_places_cost,
       gemini_cost = excluded.gemini_cost,
       scraping_cost = excluded.scraping_cost,
+      hubspot_contact_id = excluded.hubspot_contact_id,
       gemini_input_tokens = excluded.gemini_input_tokens,
       gemini_output_tokens = excluded.gemini_output_tokens
   `).run(
     lead.id,
     lead.name || '',
+    lead.phone || '',
     city,
     Number(lead.leadScore || 0),
     canonicalVariant,
@@ -1099,6 +1115,7 @@ export const saveTrackedEmail = ({
     googlePlacesCost,
     geminiCost,
     scrapingCost,
+    lead.hubspotContactId || '',
     geminiInputTokens,
     geminiOutputTokens,
   );
@@ -1159,6 +1176,103 @@ export const saveTrackedEmail = ({
     emailHtml,
     createdAt: timestamp,
   };
+};
+
+export const updateLeadHubspotContactId = ({ leadId, hubspotContactId }) => {
+  const db = getDatabase();
+
+  if (!leadId) {
+    throw new Error('Lead id is required');
+  }
+
+  db.prepare(`
+    UPDATE leads
+    SET hubspot_contact_id = ?, updated_at = ?
+    WHERE id = ?
+  `).run(
+    hubspotContactId || '',
+    new Date().toISOString(),
+    leadId,
+  );
+};
+
+export const getTrackedLeadsForHubSpotSync = () => {
+  const db = getDatabase();
+  const rows = db.prepare(`
+    SELECT
+      l.id,
+      l.name,
+      l.phone,
+      l.city,
+      l.score,
+      l.variant,
+      l.generation_mode,
+      l.updated_at,
+      l.rating,
+      l.review_count,
+      l.distance_miles,
+      l.enrichment_status,
+      l.has_website,
+      l.hubspot_contact_id,
+      e.id AS email_id,
+      e.email_text,
+      e.variant AS email_variant,
+      e.generation_mode AS email_generation_mode,
+      COALESCE(SUM(CASE WHEN ev.event_type = 'open' THEN 1 ELSE 0 END), 0) AS total_opens,
+      COALESCE(SUM(CASE WHEN ev.event_type = 'click' THEN 1 ELSE 0 END), 0) AS total_clicks
+    FROM leads l
+    LEFT JOIN emails e ON e.lead_id = l.id
+    LEFT JOIN events ev ON ev.email_id = e.id
+    GROUP BY
+      l.id,
+      l.name,
+      l.phone,
+      l.city,
+      l.score,
+      l.variant,
+      l.generation_mode,
+      l.updated_at,
+      l.rating,
+      l.review_count,
+      l.distance_miles,
+      l.enrichment_status,
+      l.has_website,
+      l.hubspot_contact_id,
+      e.id,
+      e.email_text,
+      e.variant,
+      e.generation_mode
+    ORDER BY l.updated_at DESC, l.score DESC
+  `).all();
+
+  return rows.map((row) => {
+    const normalizedLead = {
+      id: row.id,
+      name: row.name || '',
+      phone: row.phone || '',
+      city: row.city || 'Unknown',
+      score: roundMetric(row.score, 1),
+      variant: normalizeTrackedVariant(row.email_variant || row.variant, {
+        id: row.id,
+        name: row.name,
+        city: row.city,
+      }),
+      generationMode: row.email_generation_mode || row.generation_mode || 'partial',
+      enrichmentStatus: row.enrichment_status || 'unknown',
+      hasWebsite: Boolean(row.has_website),
+      hubspotContactId: row.hubspot_contact_id || '',
+      emailId: row.email_id || '',
+      emailPreview: String(row.email_text || '').split('\n').find(Boolean) || '',
+      totalOpens: Math.max(0, Math.round(toNumber(row.total_opens, 0))),
+      totalClicks: Math.max(0, Math.round(toNumber(row.total_clicks, 0))),
+    };
+
+    return {
+      ...normalizedLead,
+      enrichmentLevel: getEnrichmentBucket(normalizedLead),
+      city: normalizeLeadCity({ city: row.city }),
+    };
+  });
 };
 
 export const recordManualLeadEvent = ({ leadId, eventType, userAgent = 'manual_override', ipAddress = 'local' }) => {
@@ -1223,8 +1337,9 @@ export const resolveTrackingToken = ({ token, expectedEventType }) => {
 
   const columnName = expectedEventType === 'click' ? 'tracking_token' : 'open_tracking_token';
   const email = db.prepare(`
-    SELECT id, lead_id, variant, generation_mode, destination_url, tracking_url, open_tracking_url
-    FROM emails
+    SELECT e.id, e.lead_id, e.variant, e.generation_mode, e.destination_url, e.tracking_url, e.open_tracking_url, l.hubspot_contact_id
+    FROM emails e
+    LEFT JOIN leads l ON l.id = e.lead_id
     WHERE ${columnName} = ?
   `).get(token);
 
@@ -1240,6 +1355,7 @@ export const resolveTrackingToken = ({ token, expectedEventType }) => {
     destinationUrl: email.destination_url,
     trackingUrl: email.tracking_url,
     openTrackingUrl: email.open_tracking_url,
+    hubspotContactId: email.hubspot_contact_id || '',
   };
 };
 

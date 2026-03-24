@@ -11,12 +11,16 @@ const initialSearchRadiusMiles = Number.parseInt(process.env.INITIAL_SEARCH_RADI
 const maxSearchRadiusMiles = Number.parseInt(process.env.MAX_SEARCH_RADIUS_MILES ?? '50', 10);
 const publicServerUrl = process.env.PUBLIC_SERVER_URL || `http://localhost:${port}`;
 const trackingTokenSecret = process.env.TRACKING_TOKEN_SECRET || '';
+const hubspotEnabled = process.env.HUBSPOT_ENABLED === 'true';
+const hubspotAccessToken = process.env.HUBSPOT_ACCESS_TOKEN || '';
 
 export const env = {
   port,
   googlePlacesApiKey: process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_API_KEY || '',
   geminiApiKey: process.env.GEMINI_API_KEY || '',
   geminiModel: process.env.GEMINI_MODEL || 'gemini-3-flash-preview',
+  hubspotEnabled,
+  hubspotAccessToken,
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   publicServerUrl,
   trackingTokenSecret,

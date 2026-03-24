@@ -28,20 +28,21 @@ function InsightCard({ label, value, helper }) {
 }
 
 function EmailModal({ lead, initialTab = 'profile', enrichingLeadId = '', generatingLeadId = '', manualEventKey = '', onEnrich, onGenerateEmail, onRecordEvent, onClose }) {
-  if (!lead) {
-    return null;
-  }
-
   const [activeTab, setActiveTab] = useState(initialTab === 'email' ? 'email' : 'overview');
   const [copyStatus, setCopyStatus] = useState('');
+  const leadId = lead?.id || '';
 
   useEffect(() => {
     setActiveTab(initialTab === 'email' ? 'email' : 'overview');
-  }, [initialTab, lead?.id]);
+  }, [initialTab, leadId]);
 
   useEffect(() => {
     setCopyStatus('');
-  }, [lead?.id, activeTab]);
+  }, [leadId, activeTab]);
+
+  if (!lead) {
+    return null;
+  }
 
   const isEnriching = enrichingLeadId === lead.id;
   const isGeneratingEmail = generatingLeadId === lead.id;

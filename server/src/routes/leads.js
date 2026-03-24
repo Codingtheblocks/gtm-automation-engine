@@ -5,6 +5,7 @@ import { calculateLeadScore, getScoreTier } from '../services/leadScoringService
 import { haversineDistanceMiles } from '../utils/geo.js';
 import { generateOutreachEmail, getOfferVariantForLead, inferServicesBatchWithMetadata, regenerateLowScoreTemplates } from '../services/geminiService.js';
 import { getPromptSettings, readPromptFile, updatePromptSettings, companyUrlPromptPath } from '../services/promptService.js';
+import { createContact, logEvent } from '../services/hubspotService.js';
 import {
   buildTrackingTokens,
   buildTrackingUrls,
@@ -13,6 +14,8 @@ import {
   recordTrackingEvent,
   resolveTrackingToken,
   saveTrackedEmail,
+  updateLeadHubspotContactId,
+  getTrackedLeadsForHubSpotSync,
 } from '../services/trackingService.js';
 import { env } from '../config/env.js';
 
@@ -37,6 +40,218 @@ const logEnrichmentDiagnostics = ({ scope, lead, diagnostics }) => {
 };
 
 const roundProviderCost = (value = 0) => Number(Number(value || 0).toFixed(6));
+
+const normalizeHubSpotVariant = (variant = '', lead = {}) => {
+  const normalizedVariant = String(
+    variant
+    || lead.offerVariant
+    || lead.variant
+    || getOfferVariantForLead({
+      leadId: lead.id,
+      businessName: lead.name || lead.businessName || '',
+      location: lead.address || lead.location || '',
+      city: lead.city || '',
+    }),
+  ).trim().toUpperCase();
+
+  return normalizedVariant === 'B' ? 'B' : 'A';
+};
+
+const getHubSpotEnrichmentLevel = (lead = {}) => {
+  const normalizedLevel = String(lead.enrichmentLevel || '').trim().toLowerCase();
+
+  if (['none', 'partial', 'full'].includes(normalizedLevel)) {
+    return normalizedLevel;
+  }
+
+  if (lead.enrichmentStatus === 'enriched' && lead.generationMode === 'full_enrichment') {
+    return 'full';
+  }
+
+  if (lead.enrichmentStatus === 'enriched') {
+    return 'partial';
+  }
+
+  return 'none';
+};
+
+const buildHubSpotEventMessage = ({ eventType, variant }) => {
+  const normalizedVariant = normalizeHubSpotVariant(variant);
+
+  if (eventType === 'generated') {
+    return `Email generated (Variant ${normalizedVariant})`;
+  }
+
+  if (eventType === 'open') {
+    return `Email opened (Variant ${normalizedVariant})`;
+  }
+
+  return `Link clicked (Variant ${normalizedVariant})`;
+};
+
+const runFireAndForget = (task, label) => {
+  void Promise.resolve()
+    .then(task)
+    .catch((error) => {
+      console.error(`[HubSpot:${label}] ${error.message || 'Background sync failed'}`);
+    });
+};
+
+const resolveLeadPhoneForHubSpot = async (lead = {}) => {
+  if (lead.phone) {
+    return lead.phone;
+  }
+
+  if (!lead.id) {
+    return '';
+  }
+
+  try {
+    const details = await getPlaceDetails(lead.id);
+    return details?.formatted_phone_number || '';
+  } catch (error) {
+    console.warn(`[HubSpot:phone] ${lead.name || lead.id} -> ${error.message || 'Phone lookup failed'}`);
+    return '';
+  }
+};
+
+const syncLeadContactToHubSpot = async (lead = {}) => {
+  if (!lead?.id) {
+    return '';
+  }
+
+  const phone = await resolveLeadPhoneForHubSpot(lead);
+  const hubspotContactId = await createContact({
+    id: lead.id,
+    businessName: lead.name || lead.businessName || '',
+    email: lead.email || '',
+    phone,
+    city: lead.city || '',
+    score: lead.leadScore ?? lead.score ?? 0,
+    abVariant: normalizeHubSpotVariant('', lead),
+    enrichmentLevel: getHubSpotEnrichmentLevel(lead),
+  });
+
+  if (hubspotContactId) {
+    updateLeadHubspotContactId({
+      leadId: lead.id,
+      hubspotContactId,
+    });
+  }
+
+  return hubspotContactId || '';
+};
+
+const queueHubSpotLeadEvent = ({ lead, eventType, variant }) => {
+  runFireAndForget(async () => {
+    const hubspotContactId = await syncLeadContactToHubSpot(lead);
+
+    if (!hubspotContactId) {
+      return;
+    }
+
+    await logEvent(
+      hubspotContactId,
+      buildHubSpotEventMessage({
+        eventType,
+        variant: normalizeHubSpotVariant(variant, lead),
+      }),
+    );
+  }, eventType);
+};
+
+const queueHubSpotContactEvent = ({ hubspotContactId, eventType, variant }) => {
+  runFireAndForget(async () => {
+    if (!hubspotContactId) {
+      return;
+    }
+
+    await logEvent(
+      hubspotContactId,
+      buildHubSpotEventMessage({
+        eventType,
+        variant,
+      }),
+    );
+  }, eventType);
+};
+
+const syncTrackedLeadToHubSpot = async (trackedLead = {}) => {
+  const hubspotContactId = await syncLeadContactToHubSpot({
+    id: trackedLead.id,
+    name: trackedLead.name,
+    phone: trackedLead.phone,
+    city: trackedLead.city,
+    score: trackedLead.score,
+    variant: trackedLead.variant,
+    generationMode: trackedLead.generationMode,
+    enrichmentStatus: trackedLead.enrichmentStatus,
+    enrichmentLevel: trackedLead.enrichmentLevel,
+    hubspotContactId: trackedLead.hubspotContactId,
+  });
+
+  if (!hubspotContactId) {
+    return {
+      leadId: trackedLead.id,
+      hubspotContactId: '',
+      synced: false,
+      generatedLogged: false,
+      opensLogged: 0,
+      clicksLogged: 0,
+    };
+  }
+
+  let generatedLogged = false;
+  let opensLogged = 0;
+  let clicksLogged = 0;
+
+  if (trackedLead.emailId) {
+    generatedLogged = await logEvent(
+      hubspotContactId,
+      buildHubSpotEventMessage({
+        eventType: 'generated',
+        variant: trackedLead.variant,
+      }),
+    );
+  }
+
+  for (let index = 0; index < Number(trackedLead.totalOpens || 0); index += 1) {
+    const didLogOpen = await logEvent(
+      hubspotContactId,
+      buildHubSpotEventMessage({
+        eventType: 'open',
+        variant: trackedLead.variant,
+      }),
+    );
+
+    if (didLogOpen) {
+      opensLogged += 1;
+    }
+  }
+
+  for (let index = 0; index < Number(trackedLead.totalClicks || 0); index += 1) {
+    const didLogClick = await logEvent(
+      hubspotContactId,
+      buildHubSpotEventMessage({
+        eventType: 'click',
+        variant: trackedLead.variant,
+      }),
+    );
+
+    if (didLogClick) {
+      clicksLogged += 1;
+    }
+  }
+
+  return {
+    leadId: trackedLead.id,
+    hubspotContactId,
+    synced: true,
+    generatedLogged,
+    opensLogged,
+    clicksLogged,
+  };
+};
 
 const createEmptyProviderCosts = () => ({
   googlePlaces: {
@@ -308,6 +523,18 @@ const buildGeneratedEmailLeadRecord = async (lead) => {
     emailHtml: emailResult.generatedEmailHtml || '',
   });
 
+  queueHubSpotLeadEvent({
+    lead: {
+      ...lead,
+      ...fullyEnrichedLead,
+      ...leadWithServices,
+      providerCosts,
+      generationMode: emailResult.generationMode,
+    },
+    eventType: 'generated',
+    variant: trackingRecord.variant,
+  });
+
   return {
     ...lead,
     ...fullyEnrichedLead,
@@ -354,6 +581,12 @@ router.get('/track-click/:token', (request, response) => {
       ipAddress: request.ip || '',
     });
 
+    queueHubSpotContactEvent({
+      hubspotContactId: trackedEmail.hubspotContactId,
+      eventType: 'click',
+      variant: trackedEmail.variant,
+    });
+
     return response.redirect(trackedEmail.destinationUrl);
   } catch (error) {
     return response.status(404).json({
@@ -377,6 +610,12 @@ router.get('/track-open/:token', (request, response) => {
       generationMode: trackedEmail.generationMode,
       userAgent: request.get('user-agent') || '',
       ipAddress: request.ip || '',
+    });
+
+    queueHubSpotContactEvent({
+      hubspotContactId: trackedEmail.hubspotContactId,
+      eventType: 'open',
+      variant: trackedEmail.variant,
     });
 
     response.set('Content-Type', 'image/gif');
@@ -411,14 +650,57 @@ router.post('/prompt-settings', async (request, response) => {
   }
 });
 
+router.post('/sync-hubspot', async (_request, response) => {
+  try {
+    const trackedLeads = getTrackedLeadsForHubSpotSync();
+
+    if (!trackedLeads.length) {
+      return response.json({
+        totalLeads: 0,
+        syncedContacts: 0,
+        generatedEvents: 0,
+        openEvents: 0,
+        clickEvents: 0,
+      });
+    }
+
+    const results = [];
+
+    for (const trackedLead of trackedLeads) {
+      results.push(await syncTrackedLeadToHubSpot(trackedLead));
+    }
+
+    return response.json({
+      totalLeads: trackedLeads.length,
+      syncedContacts: results.filter((item) => item.synced).length,
+      generatedEvents: results.reduce((sum, item) => sum + (item.generatedLogged ? 1 : 0), 0),
+      openEvents: results.reduce((sum, item) => sum + Number(item.opensLogged || 0), 0),
+      clickEvents: results.reduce((sum, item) => sum + Number(item.clicksLogged || 0), 0),
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || 'Failed to sync tracked leads to HubSpot',
+    });
+  }
+});
+
 router.post('/:leadId/events', (request, response) => {
   try {
+    const normalizedEventType = String(request.body?.eventType || '').trim().toLowerCase();
     const lead = recordManualLeadEvent({
       leadId: request.params.leadId,
       eventType: request.body?.eventType,
       userAgent: request.get('user-agent') || 'manual_override',
       ipAddress: request.ip || 'local',
     });
+
+    if (lead && ['open', 'click'].includes(normalizedEventType)) {
+      queueHubSpotContactEvent({
+        hubspotContactId: lead.hubspotContactId,
+        eventType: normalizedEventType,
+        variant: lead.variant,
+      });
+    }
 
     return response.json({
       lead,

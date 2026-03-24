@@ -343,6 +343,8 @@ Minimum `.env` values:
 GOOGLE_PLACES_API_KEY=
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-3-flash-preview
+HUBSPOT_ENABLED=false
+HUBSPOT_ACCESS_TOKEN=
 PORT=3001
 CLIENT_ORIGIN=http://localhost:5173
 TARGET_MIN_LEADS=30
@@ -351,6 +353,56 @@ TOP_ENRICH_COUNT=20
 INITIAL_SEARCH_RADIUS_MILES=5
 MAX_SEARCH_RADIUS_MILES=50
 ```
+
+### HubSpot Setup
+
+1. Go to **Settings → Properties → Contact Properties**.
+2. Create the following custom properties:
+    - `lead_score` (Number)
+    - `ab_variant` (Dropdown: A, B)
+    - `enrichment_level` (Dropdown: full, partial, none)
+    - `source` (Text)
+3. Create a **Private App** and copy the **Access Token** into your `.env`:
+
+```env
+HUBSPOT_ENABLED=true
+HUBSPOT_ACCESS_TOKEN=your_token_here
+```
+
+Make sure the following scopes are enabled:
+
+- `crm.objects.contacts.read`
+- `crm.objects.contacts.write`
+- `crm.objects.notes.read`
+- `crm.objects.notes.write`
+
+This is enough to enable HubSpot contact sync and engagement note logging.
+
+### Google Places API Key
+
+1. Go to [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials).
+2. Create a new API key.
+3. Enable the **Places API** for your project.
+4. Add the key to `.env`:
+
+```env
+GOOGLE_PLACES_API_KEY=your_key_here
+```
+
+Google Places powers lead search, location-aware scoring inputs, and phone/detail enrichment.
+
+### Gemini 3 Preview API
+
+1. Go to [Google AI Studio → Gemini 3 Flash Preview](https://studio.google.com).
+2. Create or copy your API key.
+3. Add it to `.env`:
+
+```env
+GEMINI_API_KEY=your_key_here
+GEMINI_MODEL=gemini-3-flash-preview
+```
+
+Gemini powers the prompt-driven personalization path used for high-value leads and reusable template generation.
 
 Prompt-driven company and offer context lives in:
 
