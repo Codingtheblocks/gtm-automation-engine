@@ -256,44 +256,6 @@ const summarizeRows = (rows) => {
   };
 };
 
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-
-const buildBenchmarkSummary = (rows, baseSummary, variant = '') => {
-  const averageScore = divide(rows.reduce((sum, row) => sum + toNumber(row.score, 0), 0), rows.length);
-  const enrichedShare = divide(rows.filter((row) => row.enrichmentLevel !== 'none').length, rows.length);
-  const targetOpenRate = clamp(roundMetric(27 + averageScore * 0.16 + enrichedShare * 5, 1), 25, 50);
-  const targetCtor = clamp(roundMetric(11 + averageScore * 0.08 + enrichedShare * 4 + (variant === 'A' ? 1.8 : 0.6), 1), 10, 25);
-  const targetCtr = clamp(roundMetric((targetOpenRate * targetCtor) / 100, 1), 2, 8);
-  const uniqueOpens = Math.min(baseSummary.leads, Math.max(0, Math.round(baseSummary.leads * (targetOpenRate / 100))));
-  const uniqueClicks = Math.min(uniqueOpens, Math.max(0, Math.round(baseSummary.leads * (targetCtr / 100))));
-  const engagedLeads = Math.max(uniqueOpens, uniqueClicks);
-  const totalEngagements = uniqueOpens + uniqueClicks;
-  const modeledReplies = getModeledReplies({
-    draftedLeads: baseSummary.leads,
-    uniqueClicks,
-    uniqueOpens,
-  });
-
-  return {
-    ...baseSummary,
-    uniqueOpens,
-    totalOpens: uniqueOpens,
-    uniqueClicks,
-    totalClicks: uniqueClicks,
-    openRate: targetOpenRate,
-    ctr: targetCtr,
-    ctor: uniqueOpens ? roundMetric((uniqueClicks / uniqueOpens) * 100, 1) : 0,
-    costPerClick: roundMetric(divide(baseSummary.totalCost, uniqueClicks), 2),
-    costPerEngagement: roundMetric(divide(baseSummary.totalCost, totalEngagements), 2),
-    engagementRate: toPercent(engagedLeads, baseSummary.leads),
-    engagedLeads,
-    totalEngagements,
-    modeledReplies,
-    modeledReplyRate: toPercent(modeledReplies, baseSummary.leads),
-    metricSource: 'benchmark',
-  };
-};
-
 const getPresentationSummary = (rows, variant = '') => {
   const baseSummary = summarizeRows(rows);
 
@@ -311,17 +273,9 @@ const getPresentationSummary = (rows, variant = '') => {
     };
   }
 
-  return buildBenchmarkSummary(rows, baseSummary, variant);
-};
-
-const getBenchmarkSummary = (rows, label) => {
-  const summary = summarizeRows(rows);
-  const metricSource = 'benchmark';
-
   return {
-    ...summary,
-    label,
-    metricSource,
+    ...baseSummary,
+    metricSource: 'tracked',
   };
 };
 
@@ -505,11 +459,11 @@ const buildOverviewRecommendations = ({ winner, bestCity, enrichmentImpact, data
       : enrichmentImpact.message,
   });
 
-  if (totals.metricSource === 'benchmark') {
+  if (totals.metricSource !== 'tracked' || (totals.uniqueOpens === 0 && totals.uniqueClicks === 0)) {
     recommendations.push({
       category: 'Measurement quality',
-      title: 'Replace benchmark metrics with live events',
-      detail: 'Current headline rates are benchmark-backed because no real opens or clicks have been captured yet. Use the lead modal controls or live tracked links to ground the dashboard in real event data.',
+      title: 'Capture first live opens and clicks',
+      detail: 'Current headline engagement metrics are based on zero recorded events. Use the lead modal controls or live tracked links to start populating real open and click data.',
     });
   }
 
@@ -783,8 +737,8 @@ export const getDashboardOverview = () => {
       winner,
       notes: {
         replies: 'Replies are modeled from downstream click and open intensity until direct reply tracking is implemented.',
-        benchmark: totals.metricSource === 'benchmark'
-          ? 'Headline rates are using benchmark ranges until real opens or clicks are recorded locally.'
+        benchmark: totals.uniqueOpens === 0 && totals.uniqueClicks === 0
+          ? 'Headline rates remain at 0 until real opens or clicks are recorded locally.'
           : '',
       },
     },
