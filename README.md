@@ -1,34 +1,48 @@
 # GTM Automation Engine
+ 
+ Plug-and-play GTM automation for local B2B pipelines with Gemini-powered personalization, deterministic A/B testing, cost-aware enrichment, HubSpot sync, and real-time engagement analytics.
 
-Event-driven GTM engine for sourcing, prioritizing, and converting B2B leads with cost-aware personalization.
+> Production-style outbound system for sourcing leads, generating personalized emails, syncing CRM activity, and measuring campaign performance in one workflow.
 
-> Designed as a production-style GTM system combining lead intelligence, personalization, and performance analytics.
+ **Live demo:** https://codingtheblocks.github.io/gtm-automation-engine/
 
-> Built as a configurable GTM pipeline with API exposure for integration into external growth and CRM workflows.
+ ![Homepage demo](media/images/Homepage.JPG)
 
-## The Problem
+ ## The Problem
+ 
+Local B2B outreach is slow, manual, and difficult for non-technical users. Even modern GTM stacks struggle to deliver an end-to-end solution for small to mid-size businesses:
 
-B2B outbound remains inefficient and difficult to scale:
+- Sourcing high-quality leads in specific cities or neighborhoods
+- Generating personalized outreach without writing copy for every lead
+- Running reliable A/B test campaigns at scale without engineering support
+- Tracking engagement metrics like opens, clicks, and CTR in real time
+- Controlling enrichment costs and API usage for budget-conscious teams
+- Integrating lead and engagement data seamlessly into existing CRM workflows
 
-- Lead sourcing and qualification are manual and time-intensive
-- Outreach lacks contextual relevance, reducing response quality
-- Messaging performance is rarely measured in a structured way
-- Enrichment and personalization increase cost without clear ROI visibility
-
-The result is low conversion, limited feedback loops, and inefficient growth spend.
+Most tools handle only one piece of the workflow, such as scoring, enrichment, or outreach, forcing teams to stitch together disconnected systems. Non-technical users still lack a ready-to-go solution for local B2B campaigns with instant A/B testing and measurable results.
 
 ## The Solution
 
-This project implements a configurable outbound GTM engine that turns raw business data into prioritized, enriched leads and measurable outreach campaigns.
+This project provides a ready-to-go, end-to-end GTM automation system for local B2B outreach. Non-technical users can instantly launch A/B email campaigns with measurable results, without manually combining multiple tools.
 
-It is designed to simulate how modern growth teams operate: targeting, personalization, experimentation, and feedback loops within a single system.
+- **Local lead sourcing:** search and score B2B leads by city, keyword, reviews, distance, and relevance
+- **Cost-aware enrichment:** apply expensive enrichment only to the highest-value leads to control budget and API usage
+- **Plug-and-play personalization:** drop in your company info, about text, site URL, and offers; Gemini automatically tailors outreach for each lead
+- **Deterministic A/B testing:** assign leads consistently to variant A or B for reliable experiment results
+- **Event-driven tracking:** log opens and clicks in real time, with CTR, open rate, and other metrics
+- **CRM integration:** sync contacts and engagement activity to HubSpot for downstream pipeline and automation support
+- **API exposure:** all functionality available via backend endpoints for integration into custom workflows or RevOps pipelines
 
-- Sources leads from real business data
-- Scores and prioritizes opportunities using location and quality signals
-- Applies tiered enrichment to high-value leads only
-- Generates personalized outreach using LLMs with deterministic A/B assignment
-- Tracks engagement via event-based analytics (opens, clicks)
-- Analyzes performance across segments, variants, and cost tiers
+Result: users get a fully automated local B2B outreach engine that handles lead sourcing, personalization, A/B experimentation, tracking, and CRM sync in a single plug-and-play system.
+
+## Why This System is Different
+
+- **Local B2B focus:** filter leads by city, reviews, and operational relevance
+- **Automated A/B testing:** deterministic variant assignment for consistent experiment tracking
+- **LLM personalization:** Gemini generates tailored outreach per lead
+- **Event-driven metrics:** track opens and clicks with HubSpot integration
+- **Cost-aware enrichment:** allocate expensive processing only to high-value leads
+- **API-first design:** integrate into existing CRM and automation workflows
 
 ## System Capabilities
 
@@ -49,7 +63,7 @@ The backend exposes API endpoints for integration into external workflows, enabl
 - A lead generation and outreach microservice
 - A pipeline component inside broader RevOps systems
 
-Planned integrations include CRM platforms such as HubSpot for downstream campaign and pipeline management.
+Ready to go integrations with CRM platforms like HubSpot for downstream campaign and pipeline management.
 
 ## API-First Design
 
@@ -208,34 +222,15 @@ Response:
 }
 ```
 
-## Demo
-
-A frontend-only demo with a preloaded campaign is available at:
-https://codingtheblocks.github.io/gtm-automation-engine/
-
-![Homepage demo](media/images/Homepage.JPG)
-
-It simulates:
-
-- Lead sourcing and scoring outputs
-- Tiered enrichment behavior
-- LLM-assisted outreach
-- A/B variant assignment
-- Engagement tracking (open and click events)
-- Campaign-level analytics
-
-This allows users to interact with the system without requiring API keys or backend setup. Demo interactions persist locally in the browser for each visitor and do not use shared backend storage.
-
-The full system with live APIs, enrichment, and tracking runs locally or in a deployed backend environment.
-
 ## A/B Testing
 
-Two offer variants are tested:
+The system supports deterministic A/B testing of offer variants so every lead stays in the same bucket across runs.
 
-- **Variant A**: Flexible billing / pay after job completion
-- **Variant B**: Same-day / next-day delivery
-
-Each lead is assigned a stable variant so the same business stays in the same bucket across runs. That makes it possible to compare engagement by variant, segment, and cost profile.
+- **Default demo example:**
+  - Variant A: Flexible billing / pay after job completion
+  - Variant B: Same-day / next-day delivery
+- **Customizable:** Replace the default offers with any messaging, promotion, or CTA to run your own experiments.
+- **Reliable measurement:** Stable assignment enables clean comparisons of engagement by variant, segment, enrichment tier, and cost profile.
 
 ## Event Tracking
 
@@ -343,7 +338,7 @@ Minimum `.env` values:
 GOOGLE_PLACES_API_KEY=
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-3-flash-preview
-HUBSPOT_ENABLED=false
+HUBSPOT_ENABLED=true
 HUBSPOT_ACCESS_TOKEN=
 PORT=3001
 CLIENT_ORIGIN=http://localhost:5173
@@ -414,11 +409,11 @@ Prompt-driven company and offer context lives in:
 
 ## Future Improvements
 
-- CRM integration with HubSpot or Salesforce
-- Real outbound sending via SMTP or email APIs
-- Multi-step sequences and reply tracking
-- Revenue attribution and conversion tracking
-- Queueing, caching, and provider-level telemetry
+- Real outbound sending via SMTP providers or transactional email APIs
+- Multi-step sequences plus reply tracking and thread-level attribution
+- Automation triggers for n8n, Zapier, or internal schedulers to kick off workflows
+- Revenue attribution and conversion tracking tied to HubSpot opportunities
+- Queueing, caching, and provider-level telemetry for higher-volume throughput
 
 ## Why This Project Matters
 
