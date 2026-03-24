@@ -210,7 +210,10 @@ Response:
 
 ## Demo
 
-A frontend-only demo can be deployed using preloaded campaign data.
+A frontend-only demo with a preloaded campaign is available at:
+https://codingtheblocks.github.io/gtm-automation-engine/
+
+![Homepage demo](media/images/Homepage.JPG)
 
 It simulates:
 
@@ -221,7 +224,7 @@ It simulates:
 - Engagement tracking (open and click events)
 - Campaign-level analytics
 
-This allows reviewers to interact with the system without requiring API keys or backend setup.
+This allows users to interact with the system without requiring API keys or backend setup. Demo interactions persist locally in the browser for each visitor and do not use shared backend storage.
 
 The full system with live APIs, enrichment, and tracking runs locally or in a deployed backend environment.
 

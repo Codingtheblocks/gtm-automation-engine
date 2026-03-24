@@ -10,6 +10,18 @@ import {
   getLeadFilterOptions,
   mergeLeadWithTracking,
 } from './utils/dashboardMetrics.js';
+import {
+  enrichDemoLead,
+  generateDemoEmailForLead,
+  generateDemoEmails,
+  isDemoMode,
+  loadDemoState,
+  persistDemoState,
+  recordDemoLeadEvent,
+  resetDemoState,
+  saveDemoPromptSettings,
+  searchDemoLeads,
+} from './demo/demoDataService.js';
 
 const LEADS_API_BASE_URL = 'http://localhost:3001/api/leads';
 const DASHBOARD_API_BASE_URL = 'http://localhost:3001/api/dashboard';
@@ -78,29 +90,38 @@ const getInitialDashboardState = () => {
 };
 
 function App() {
-  const initialDashboardState = getInitialDashboardState();
+  const demoMode = isDemoMode();
+  const initialDashboardState = demoMode
+    ? loadDemoState()
+    : getInitialDashboardState();
   const [activePage, setActivePage] = useState('overview');
   const [form, setForm] = useState(initialDashboardState.form);
   const [filters, setFilters] = useState(initialDashboardState.filters);
   const [leadFilters, setLeadFilters] = useState(getDefaultLeadFilters());
   const [loading, setLoading] = useState(false);
-  const [loadingDashboard, setLoadingDashboard] = useState(true);
+  const [loadingDashboard, setLoadingDashboard] = useState(!demoMode);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [leads, setLeads] = useState(initialDashboardState.leads);
   const [searchMetadata, setSearchMetadata] = useState(initialDashboardState.searchMetadata);
-  const [dashboardData, setDashboardData] = useState(EMPTY_DASHBOARD_DATA);
+  const [dashboardData, setDashboardData] = useState(initialDashboardState.dashboardData || EMPTY_DASHBOARD_DATA);
   const [selectedLead, setSelectedLead] = useState(null);
   const [selectedLeadTab, setSelectedLeadTab] = useState('profile');
   const [enrichingLeadId, setEnrichingLeadId] = useState('');
   const [generatingLeadId, setGeneratingLeadId] = useState('');
-  const [promptSettings, setPromptSettings] = useState(EMPTY_PROMPT_SETTINGS);
-  const [loadingPromptSettings, setLoadingPromptSettings] = useState(true);
+  const [promptSettings, setPromptSettings] = useState(initialDashboardState.promptSettings || EMPTY_PROMPT_SETTINGS);
+  const [loadingPromptSettings, setLoadingPromptSettings] = useState(!demoMode);
   const [savingPromptSettings, setSavingPromptSettings] = useState(false);
   const [promptSettingsStatus, setPromptSettingsStatus] = useState('');
   const [manualEventKey, setManualEventKey] = useState('');
 
   const loadPromptSettings = async () => {
+    if (demoMode) {
+      setPromptSettings(initialDashboardState.promptSettings || EMPTY_PROMPT_SETTINGS);
+      setLoadingPromptSettings(false);
+      return;
+    }
+
     setLoadingPromptSettings(true);
 
     try {
@@ -126,6 +147,12 @@ function App() {
   };
 
   const loadDashboardData = async ({ showLoading = true } = {}) => {
+    if (demoMode) {
+      setDashboardData((current) => current || initialDashboardState.dashboardData || EMPTY_DASHBOARD_DATA);
+      setLoadingDashboard(false);
+      return;
+    }
+
     if (showLoading) {
       setLoadingDashboard(true);
     }
@@ -155,10 +182,22 @@ function App() {
   useEffect(() => {
     loadPromptSettings();
     loadDashboardData();
-  }, []);
+  }, [demoMode]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (demoMode) {
+      persistDemoState({
+        form,
+        filters,
+        leads,
+        searchMetadata,
+        dashboardData,
+        promptSettings,
+      });
       return;
     }
 
@@ -171,15 +210,19 @@ function App() {
         searchMetadata,
       }),
     );
-  }, [filters, form, leads, searchMetadata]);
+  }, [dashboardData, demoMode, filters, form, leads, promptSettings, searchMetadata]);
 
   useEffect(() => {
+    if (demoMode) {
+      return undefined;
+    }
+
     const intervalId = setInterval(() => {
       loadDashboardData({ showLoading: false });
     }, DASHBOARD_POLL_INTERVAL_MS);
 
     return () => clearInterval(intervalId);
-  }, []);
+  }, [demoMode]);
 
   const handleFormChange = (event) => {
     const { name, value } = event.target;
@@ -222,6 +265,15 @@ function App() {
     setLoading(true);
     setError('');
 
+    if (demoMode) {
+      const data = searchDemoLeads({ dashboardData, form });
+      setLeads(data.leads || []);
+      setSearchMetadata(data.searchMetadata || null);
+      setActivePage('leads');
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch(`${LEADS_API_BASE_URL}/search`, {
         method: 'POST',
@@ -257,6 +309,15 @@ function App() {
     setEnrichingLeadId(lead.id);
     setError('');
 
+    if (demoMode) {
+      const data = enrichDemoLead({ dashboardData, leads, leadId: lead.id });
+      setDashboardData(data.dashboardData || EMPTY_DASHBOARD_DATA);
+      setLeads(data.leads || []);
+      setSelectedLead((currentLead) => (currentLead?.id === lead.id ? data.lead : currentLead));
+      setEnrichingLeadId('');
+      return;
+    }
+
     try {
       const response = await fetch(`${LEADS_API_BASE_URL}/enrich-lead`, {
         method: 'POST',
@@ -285,6 +346,14 @@ function App() {
     setSavingPromptSettings(true);
     setError('');
     setPromptSettingsStatus('');
+
+    if (demoMode) {
+      const result = saveDemoPromptSettings(promptSettings);
+      setPromptSettings(result.promptSettings);
+      setPromptSettingsStatus(result.status);
+      setSavingPromptSettings(false);
+      return;
+    }
 
     try {
       const response = await fetch(`${LEADS_API_BASE_URL}/prompt-settings`, {
@@ -323,6 +392,28 @@ function App() {
 
     setGeneratingLeadId(lead.id);
     setError('');
+
+    if (demoMode) {
+      const data = generateDemoEmailForLead({ dashboardData, leads, leadId: lead.id });
+      setDashboardData(data.dashboardData || EMPTY_DASHBOARD_DATA);
+      setLeads(data.leads || []);
+      setSelectedLead((currentLead) => {
+        const nextLead = currentLead?.id === lead.id ? data.lead : currentLead;
+
+        if (nextLead && tab === 'email') {
+          setSelectedLeadTab('email');
+        }
+
+        return nextLead;
+      });
+
+      if (selectedLead?.id !== lead.id && data.lead) {
+        handleOpenLead(data.lead, tab);
+      }
+
+      setGeneratingLeadId('');
+      return;
+    }
 
     try {
       const response = await fetch(`${LEADS_API_BASE_URL}/generate-email`, {
@@ -365,6 +456,15 @@ function App() {
   const handleGenerateEmails = async () => {
     setGenerating(true);
     setError('');
+
+    if (demoMode) {
+      const data = generateDemoEmails({ dashboardData, leads });
+      setDashboardData(data.dashboardData || EMPTY_DASHBOARD_DATA);
+      setLeads(data.leads || []);
+      setSelectedLead((currentLead) => (currentLead ? (data.leads || []).find((lead) => lead.id === currentLead.id) || currentLead : currentLead));
+      setGenerating(false);
+      return;
+    }
 
     try {
       const batchSize = searchMetadata?.topEnrichCount || 20;
@@ -416,6 +516,15 @@ function App() {
     const nextManualEventKey = `${lead.id}:${eventType}`;
     setManualEventKey(nextManualEventKey);
     setError('');
+
+    if (demoMode) {
+      const data = recordDemoLeadEvent({ dashboardData, leads, leadId: lead.id, eventType });
+      setDashboardData(data.dashboardData || EMPTY_DASHBOARD_DATA);
+      setLeads(data.leads || []);
+      setSelectedLead((currentLead) => (currentLead?.id === lead.id ? data.lead : currentLead));
+      setManualEventKey('');
+      return;
+    }
 
     try {
       const response = await fetch(`${LEADS_API_BASE_URL}/${lead.id}/events`, {
@@ -477,6 +586,22 @@ function App() {
   );
 
   const handleClearSavedState = () => {
+    if (demoMode) {
+      const resetState = resetDemoState();
+      setForm(resetState.form);
+      setFilters(resetState.filters);
+      setLeadFilters(getDefaultLeadFilters());
+      setLeads(resetState.leads);
+      setSearchMetadata(resetState.searchMetadata);
+      setDashboardData(resetState.dashboardData);
+      setPromptSettings(resetState.promptSettings);
+      setSelectedLead(null);
+      setSelectedLeadTab('profile');
+      setPromptSettingsStatus('');
+      setError('');
+      return;
+    }
+
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(STORAGE_KEY);
     }
@@ -539,6 +664,7 @@ function App() {
         </header>
 
         {error ? <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div> : null}
+        {demoMode ? <div className="rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-3 text-sm text-brand-100">Demo mode is running from a static seed with per-browser persistence. Your interactions stay local to this browser and do not require API keys or a backend.</div> : null}
         {loadingDashboard ? <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm text-slate-400">Refreshing dashboard metrics from tracked drafts...</div> : null}
 
         {renderedPage}
@@ -550,7 +676,7 @@ function App() {
         ) : null}
 
         <footer className="text-xs text-slate-500">
-          Public business data only. Emails are generated as drafts and are never sent.
+          {demoMode ? 'Frontend-only demo mode. Campaign state persists locally in this browser only.' : 'Public business data only. Emails are generated as drafts and are never sent.'}
         </footer>
       </div>
 

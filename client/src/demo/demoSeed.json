@@ -1,0 +1,963 @@
+{
+  "overview": {
+    "kpis": {
+      "totalLeads": 20,
+      "leadsProcessed": 20,
+      "enrichedLeads": 20,
+      "averageLeadScore": 89,
+      "totalCost": 0.64,
+      "costPerLead": 0.03,
+      "costPerClick": 0.32,
+      "costPerEngagement": 0.21,
+      "overallCtr": 10,
+      "openRate": 15,
+      "ctor": 66.7,
+      "engagementRate": 15,
+      "metricSource": "tracked"
+    },
+    "abPerformance": {
+      "variants": [
+        {
+          "variant": "A",
+          "leads": 8,
+          "uniqueOpens": 2,
+          "totalOpens": 2,
+          "uniqueClicks": 1,
+          "totalClicks": 1,
+          "openRate": 25,
+          "ctr": 12.5,
+          "ctor": 50,
+          "costPerLead": 0.03,
+          "costPerClick": 0.26,
+          "costPerEngagement": 0.13,
+          "engagementRate": 25,
+          "totalCost": 0.26,
+          "replies": 0,
+          "repliesModeled": true,
+          "metricSource": "tracked"
+        },
+        {
+          "variant": "B",
+          "leads": 12,
+          "uniqueOpens": 1,
+          "totalOpens": 1,
+          "uniqueClicks": 1,
+          "totalClicks": 1,
+          "openRate": 8.3,
+          "ctr": 8.3,
+          "ctor": 100,
+          "costPerLead": 0.03,
+          "costPerClick": 0.38,
+          "costPerEngagement": 0.38,
+          "engagementRate": 8.3,
+          "totalCost": 0.38,
+          "replies": 0,
+          "repliesModeled": true,
+          "metricSource": "tracked"
+        }
+      ],
+      "dataConfidence": {
+        "level": "Low",
+        "reason": "Sample size is still thin, so treat the winner as directional rather than statistically strong."
+      },
+      "comparisonRows": [
+        {
+          "metric": "Leads",
+          "variantA": 8,
+          "variantB": 12,
+          "winner": "B"
+        },
+        {
+          "metric": "CTR",
+          "variantA": 12.5,
+          "variantB": 8.3,
+          "winner": "A"
+        },
+        {
+          "metric": "Open Rate",
+          "variantA": 25,
+          "variantB": 8.3,
+          "winner": "A"
+        },
+        {
+          "metric": "Cost / Click",
+          "variantA": 0.26,
+          "variantB": 0.38,
+          "winner": "A"
+        },
+        {
+          "metric": "Engagement %",
+          "variantA": 25,
+          "variantB": 8.3,
+          "winner": "A"
+        }
+      ],
+      "winner": {
+        "variant": "A",
+        "label": "Flexible Billing",
+        "ctrLiftPercent": 51,
+        "costPerClickReductionPercent": 32
+      },
+      "notes": {
+        "replies": "Replies are modeled from downstream click and open intensity until direct reply tracking is implemented.",
+        "benchmark": ""
+      }
+    },
+    "segmentInsights": {
+      "bestScoreRange": {
+        "label": "75-100",
+        "ctr": 11.8,
+        "leads": 17,
+        "insight": "Higher-score shops are producing the strongest response rate in the current campaign mix."
+      },
+      "bestCity": {
+        "label": "Miami, FL",
+        "ctr": 10,
+        "leads": 20,
+        "insight": "This city cluster is producing the strongest current response rate and should be the next place to expand."
+      },
+      "enrichmentImpact": {
+        "hasEnoughData": false,
+        "enrichedLeadCount": 20,
+        "nonEnrichedLeadCount": 0,
+        "message": "Not enough enriched leads yet to measure performance",
+        "insight": "Route more tracked drafts through enrichment before comparing CTR lift."
+      }
+    },
+    "recommendations": [
+      {
+        "category": "Variant optimization",
+        "title": "Keep testing toward Variant A",
+        "detail": "Variant A is directionally ahead, but confidence is low. Hold the 50/50 split until each variant has deeper event volume."
+      },
+      {
+        "category": "Geographic expansion",
+        "title": "Expand targeting in Miami, FL",
+        "detail": "Miami, FL is the strongest live cluster right now. Add adjacent city searches and keep the winning offer consistent there."
+      },
+      {
+        "category": "Enrichment strategy",
+        "title": "Use enrichment selectively while data matures",
+        "detail": "Not enough enriched leads yet to measure performance"
+      }
+    ]
+  },
+  "leads": {
+    "rows": [
+      {
+        "id": "ChIJhYzJMsmw2YgRTlaNOrWJWII",
+        "name": "305 Car Care Bodyshop Miami Fl",
+        "city": "Miami, FL",
+        "score": 86.6,
+        "variant": "B",
+        "tier": "high",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.04,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.004,
+          "scraping": 0.02
+        },
+        "geminiInputTokens": 5015,
+        "geminiOutputTokens": 545,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Sourcing for 305 Car Care Bodyshop",
+        "generationMode": "full_enrichment",
+        "rating": 4.9,
+        "reviewCount": 124,
+        "distanceMiles": 5.2,
+        "hasWebsite": true,
+        "updatedAt": "2026-03-24T01:52:07.692Z",
+        "draftedAt": "2026-03-24T01:52:07.692Z",
+        "lastActivityAt": "2026-03-24T01:52:07.692Z",
+        "events": []
+      },
+      {
+        "id": "ChIJeWk11qS32YgRiUSXoneDw7I",
+        "name": "Green's Garage",
+        "city": "Miami, FL",
+        "score": 95.2,
+        "variant": "A",
+        "tier": "high",
+        "status": "clicked",
+        "opens": 1,
+        "clicks": 1,
+        "uniqueOpens": 1,
+        "uniqueClicks": 1,
+        "cost": 0.04,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.005,
+          "scraping": 0.02
+        },
+        "geminiInputTokens": 6200,
+        "geminiOutputTokens": 572,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Supporting your diagnostic work at Green's Garage",
+        "generationMode": "full_enrichment",
+        "rating": 4.6,
+        "reviewCount": 772,
+        "distanceMiles": 3.5,
+        "hasWebsite": true,
+        "updatedAt": "2026-03-24T01:52:06.431Z",
+        "draftedAt": "2026-03-24T01:52:06.431Z",
+        "lastActivityAt": "2026-03-24T02:05:04.949Z",
+        "events": [
+          {
+            "type": "click",
+            "timestamp": "2026-03-24T02:05:04.949Z"
+          },
+          {
+            "type": "open",
+            "timestamp": "2026-03-24T02:05:04.123Z"
+          }
+        ]
+      },
+      {
+        "id": "ChIJ14q1t8Ox2YgRvuzSbwdRjEw",
+        "name": "Fast Tire & Auto Repair Miami",
+        "city": "Miami, FL",
+        "score": 81.1,
+        "variant": "B",
+        "tier": "high",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.04,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.005,
+          "scraping": 0.02
+        },
+        "geminiInputTokens": 5935,
+        "geminiOutputTokens": 610,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Parts delays at Fast Tire & Auto Repair",
+        "generationMode": "full_enrichment",
+        "rating": 4.9,
+        "reviewCount": 83,
+        "distanceMiles": 3.4,
+        "hasWebsite": true,
+        "updatedAt": "2026-03-24T01:52:06.280Z",
+        "draftedAt": "2026-03-24T01:52:06.280Z",
+        "lastActivityAt": "2026-03-24T01:52:06.280Z",
+        "events": []
+      },
+      {
+        "id": "ChIJ08eT9fC22YgR1fh0E8Aeu4c",
+        "name": "Rey's Auto Repair Shop",
+        "city": "Miami, FL",
+        "score": 98.6,
+        "variant": "B",
+        "tier": "high",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.03,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.002,
+          "scraping": 0.02
+        },
+        "geminiInputTokens": 2027,
+        "geminiOutputTokens": 346,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Faster parts delivery for Rey's Auto Repair Shop",
+        "generationMode": "full_enrichment",
+        "rating": 4.9,
+        "reviewCount": 654,
+        "distanceMiles": 1.8,
+        "hasWebsite": true,
+        "updatedAt": "2026-03-24T01:52:06.105Z",
+        "draftedAt": "2026-03-24T01:52:06.105Z",
+        "lastActivityAt": "2026-03-24T01:52:06.105Z",
+        "events": []
+      },
+      {
+        "id": "ChIJBW8nPnC42YgRv_FcfsKLG0E",
+        "name": "Miami's Quality Auto Repair",
+        "city": "Miami, FL",
+        "score": 95.2,
+        "variant": "A",
+        "tier": "high",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.04,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.005,
+          "scraping": 0.02
+        },
+        "geminiInputTokens": 6828,
+        "geminiOutputTokens": 648,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Supporting major repairs at Miami's Quality Auto Repair",
+        "generationMode": "full_enrichment",
+        "rating": 4.7,
+        "reviewCount": 867,
+        "distanceMiles": 7.6,
+        "hasWebsite": true,
+        "updatedAt": "2026-03-24T01:52:05.938Z",
+        "draftedAt": "2026-03-24T01:52:05.938Z",
+        "lastActivityAt": "2026-03-24T01:52:05.938Z",
+        "events": []
+      },
+      {
+        "id": "ChIJMbE47G232YgRe-Y9GD9I92k",
+        "name": "Tony’s Vehicle Solutions",
+        "city": "Miami, FL",
+        "score": 97.1,
+        "variant": "A",
+        "tier": "high",
+        "status": "opened",
+        "opens": 1,
+        "clicks": 0,
+        "uniqueOpens": 1,
+        "uniqueClicks": 0,
+        "cost": 0.04,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.003,
+          "scraping": 0.02
+        },
+        "geminiInputTokens": 2627,
+        "geminiOutputTokens": 481,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Parts sourcing for Tony’s Vehicle Solutions",
+        "generationMode": "full_enrichment",
+        "rating": 4.8,
+        "reviewCount": 1216,
+        "distanceMiles": 3.9,
+        "hasWebsite": true,
+        "updatedAt": "2026-03-24T01:52:05.756Z",
+        "draftedAt": "2026-03-24T01:52:05.756Z",
+        "lastActivityAt": "2026-03-24T02:04:48.245Z",
+        "events": [
+          {
+            "type": "open",
+            "timestamp": "2026-03-24T02:04:48.245Z"
+          }
+        ]
+      },
+      {
+        "id": "ChIJR7NW8oG32YgRD1s5hZW1Ho4",
+        "name": "AutoVice",
+        "city": "Miami, FL",
+        "score": 95.8,
+        "variant": "B",
+        "tier": "high",
+        "status": "clicked",
+        "opens": 1,
+        "clicks": 1,
+        "uniqueOpens": 1,
+        "uniqueClicks": 1,
+        "cost": 0.04,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.005,
+          "scraping": 0.02
+        },
+        "geminiInputTokens": 6302,
+        "geminiOutputTokens": 630,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Parts delivery for AutoVice",
+        "generationMode": "full_enrichment",
+        "rating": 4.6,
+        "reviewCount": 540,
+        "distanceMiles": 1.4,
+        "hasWebsite": true,
+        "updatedAt": "2026-03-24T01:52:05.582Z",
+        "draftedAt": "2026-03-24T01:52:05.582Z",
+        "lastActivityAt": "2026-03-24T02:06:30.535Z",
+        "events": [
+          {
+            "type": "click",
+            "timestamp": "2026-03-24T02:06:30.535Z"
+          },
+          {
+            "type": "open",
+            "timestamp": "2026-03-24T02:06:28.531Z"
+          }
+        ]
+      },
+      {
+        "id": "ChIJWdDGH5Gx2YgRuyGsXgbfAEE",
+        "name": "Quick Fix Mobile Mechanic",
+        "city": "Miami, FL",
+        "score": 72.9,
+        "variant": "A",
+        "tier": "medium",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.04,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.003,
+          "scraping": 0.02
+        },
+        "geminiInputTokens": 3786,
+        "geminiOutputTokens": 489,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "semi-personalized, value-driven",
+        "emailPreview": "Subject: Supporting your mobile repairs in Miami",
+        "generationMode": "full_enrichment",
+        "rating": 5,
+        "reviewCount": 27,
+        "distanceMiles": 7.2,
+        "hasWebsite": true,
+        "updatedAt": "2026-03-24T01:52:05.414Z",
+        "draftedAt": "2026-03-24T01:52:05.414Z",
+        "lastActivityAt": "2026-03-24T01:52:05.414Z",
+        "events": []
+      },
+      {
+        "id": "ChIJ--qZoWbOJqwROCYqAtw7zw0",
+        "name": "NuBrakes",
+        "city": "Miami, FL",
+        "score": 98.9,
+        "variant": "A",
+        "tier": "high",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.04,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.005,
+          "scraping": 0.02
+        },
+        "geminiInputTokens": 6807,
+        "geminiOutputTokens": 644,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Supporting NuBrakes’ mobile operations in Miami",
+        "generationMode": "full_enrichment",
+        "rating": 4.9,
+        "reviewCount": 374,
+        "distanceMiles": 0.7,
+        "hasWebsite": true,
+        "updatedAt": "2026-03-24T01:52:05.252Z",
+        "draftedAt": "2026-03-24T01:52:05.252Z",
+        "lastActivityAt": "2026-03-24T01:52:05.252Z",
+        "events": []
+      },
+      {
+        "id": "ChIJDTFpz7W22YgRzyIr_AJkDiU",
+        "name": "E T Auto Repair",
+        "city": "Miami, FL",
+        "score": 96.1,
+        "variant": "B",
+        "tier": "high",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.03,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.002,
+          "scraping": 0.02
+        },
+        "geminiInputTokens": 2613,
+        "geminiOutputTokens": 391,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Parts delivery for E T Auto Repair",
+        "generationMode": "full_enrichment",
+        "rating": 4.7,
+        "reviewCount": 306,
+        "distanceMiles": 3.9,
+        "hasWebsite": true,
+        "updatedAt": "2026-03-24T01:52:04.990Z",
+        "draftedAt": "2026-03-24T01:52:04.990Z",
+        "lastActivityAt": "2026-03-24T01:52:04.990Z",
+        "events": []
+      },
+      {
+        "id": "ChIJl4lt81C22YgR6BL7vp3QcMc",
+        "name": "Leader Service",
+        "city": "Miami, FL",
+        "score": 98.5,
+        "variant": "A",
+        "tier": "high",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.04,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.005,
+          "scraping": 0.02
+        },
+        "geminiInputTokens": 6603,
+        "geminiOutputTokens": 571,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Leader Service / XYZ Parts",
+        "generationMode": "full_enrichment",
+        "rating": 4.9,
+        "reviewCount": 283,
+        "distanceMiles": 2,
+        "hasWebsite": true,
+        "updatedAt": "2026-03-24T01:52:04.814Z",
+        "draftedAt": "2026-03-24T01:52:04.814Z",
+        "lastActivityAt": "2026-03-24T01:52:04.814Z",
+        "events": []
+      },
+      {
+        "id": "ChIJEVXo3U632YgRckca0hHsup0",
+        "name": "ALFA GARAGE MIAMI",
+        "city": "Miami, FL",
+        "score": 98.8,
+        "variant": "B",
+        "tier": "high",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.03,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.001,
+          "scraping": 0.02
+        },
+        "geminiInputTokens": 889,
+        "geminiOutputTokens": 306,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Moving jobs faster at ALFA GARAGE MIAMI",
+        "generationMode": "full_enrichment",
+        "rating": 5,
+        "reviewCount": 513,
+        "distanceMiles": 5.1,
+        "hasWebsite": true,
+        "updatedAt": "2026-03-24T01:52:04.652Z",
+        "draftedAt": "2026-03-24T01:52:04.652Z",
+        "lastActivityAt": "2026-03-24T01:52:04.652Z",
+        "events": []
+      },
+      {
+        "id": "ChIJ8wkVy4Ov2YgR2J5eHsT0PYM",
+        "name": "Mechanics in Motion LLC Mobile Mechanics",
+        "city": "Miami, FL",
+        "score": 95.8,
+        "variant": "B",
+        "tier": "high",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.04,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.004,
+          "scraping": 0.02
+        },
+        "geminiInputTokens": 5205,
+        "geminiOutputTokens": 589,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Moving parts faster for your mobile team",
+        "generationMode": "full_enrichment",
+        "rating": 4.6,
+        "reviewCount": 271,
+        "distanceMiles": 1.3,
+        "hasWebsite": true,
+        "updatedAt": "2026-03-24T01:52:04.461Z",
+        "draftedAt": "2026-03-24T01:52:04.461Z",
+        "lastActivityAt": "2026-03-24T01:52:04.461Z",
+        "events": []
+      },
+      {
+        "id": "ChIJq3IbUbS22YgRSsLfdF5GPV8",
+        "name": "Rodriguez Brothers Auto Services",
+        "city": "Miami, FL",
+        "score": 83.9,
+        "variant": "B",
+        "tier": "high",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.03,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.002,
+          "scraping": 0.02
+        },
+        "geminiInputTokens": 1046,
+        "geminiOutputTokens": 337,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Keeping your bays moving at Rodriguez Brothers",
+        "generationMode": "full_enrichment",
+        "rating": 4.5,
+        "reviewCount": 128,
+        "distanceMiles": 2.9,
+        "hasWebsite": true,
+        "updatedAt": "2026-03-24T01:52:03.965Z",
+        "draftedAt": "2026-03-24T01:52:03.965Z",
+        "lastActivityAt": "2026-03-24T01:52:03.965Z",
+        "events": []
+      },
+      {
+        "id": "ChIJnSS0P_K22YgROp2rU5OJsUc",
+        "name": "Mario Busto Auto Repair",
+        "city": "Miami, FL",
+        "score": 86.7,
+        "variant": "B",
+        "tier": "high",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.04,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.003,
+          "scraping": 0.02
+        },
+        "geminiInputTokens": 3154,
+        "geminiOutputTokens": 422,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Keeping your bays moving at Mario Busto Auto Repair",
+        "generationMode": "full_enrichment",
+        "rating": 4.9,
+        "reviewCount": 118,
+        "distanceMiles": 1.5,
+        "hasWebsite": true,
+        "updatedAt": "2026-03-24T01:52:03.807Z",
+        "draftedAt": "2026-03-24T01:52:03.807Z",
+        "lastActivityAt": "2026-03-24T01:52:03.807Z",
+        "events": []
+      },
+      {
+        "id": "ChIJN4-2yF6x2YgRNTDFc4g6akM",
+        "name": "Red Lion Auto Repair",
+        "city": "Miami, FL",
+        "score": 95.6,
+        "variant": "B",
+        "tier": "high",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.04,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.005,
+          "scraping": 0.02
+        },
+        "geminiInputTokens": 6267,
+        "geminiOutputTokens": 555,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Parts delivery for Red Lion Auto Repair",
+        "generationMode": "full_enrichment",
+        "rating": 4.7,
+        "reviewCount": 401,
+        "distanceMiles": 6,
+        "hasWebsite": true,
+        "updatedAt": "2026-03-24T01:52:03.520Z",
+        "draftedAt": "2026-03-24T01:52:03.520Z",
+        "lastActivityAt": "2026-03-24T01:52:03.520Z",
+        "events": []
+      },
+      {
+        "id": "ChIJDc9d1wK32YgR_ywdfUIyoPk",
+        "name": "Hector Fong Auto Repair",
+        "city": "Miami, FL",
+        "score": 64.7,
+        "variant": "A",
+        "tier": "medium",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.01,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.001,
+          "scraping": 0
+        },
+        "geminiInputTokens": 557,
+        "geminiOutputTokens": 150,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "semi-personalized, value-driven",
+        "emailPreview": "Subject: Parts supply and cash flow for Hector Fong Auto Repair",
+        "generationMode": "full_enrichment",
+        "rating": 4.8,
+        "reviewCount": 41,
+        "distanceMiles": 1.5,
+        "hasWebsite": false,
+        "updatedAt": "2026-03-24T01:52:02.309Z",
+        "draftedAt": "2026-03-24T01:52:02.309Z",
+        "lastActivityAt": "2026-03-24T01:52:02.309Z",
+        "events": []
+      },
+      {
+        "id": "ChIJe2Fr3xu32YgRBt9PfEOmsOI",
+        "name": "D&K Road Mobile Tire 24/7",
+        "city": "Miami, FL",
+        "score": 63.6,
+        "variant": "B",
+        "tier": "medium",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.01,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.001,
+          "scraping": 0
+        },
+        "geminiInputTokens": 562,
+        "geminiOutputTokens": 136,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "semi-personalized, value-driven",
+        "emailPreview": "Subject: Parts delivery for D&K Road Mobile Tire",
+        "generationMode": "full_enrichment",
+        "rating": 5,
+        "reviewCount": 18,
+        "distanceMiles": 0.2,
+        "hasWebsite": false,
+        "updatedAt": "2026-03-24T01:52:02.111Z",
+        "draftedAt": "2026-03-24T01:52:02.111Z",
+        "lastActivityAt": "2026-03-24T01:52:02.111Z",
+        "events": []
+      },
+      {
+        "id": "ChIJVe6wj9yw2YgRc0kdpbVz7oc",
+        "name": "J C Car Care Center",
+        "city": "Miami, FL",
+        "score": 88,
+        "variant": "A",
+        "tier": "high",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.01,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.001,
+          "scraping": 0
+        },
+        "geminiInputTokens": 558,
+        "geminiOutputTokens": 161,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Supporting J C Car Care Center's repair flow",
+        "generationMode": "full_enrichment",
+        "rating": 4.9,
+        "reviewCount": 1447,
+        "distanceMiles": 5.4,
+        "hasWebsite": false,
+        "updatedAt": "2026-03-24T01:52:01.615Z",
+        "draftedAt": "2026-03-24T01:52:01.615Z",
+        "lastActivityAt": "2026-03-24T01:52:01.615Z",
+        "events": []
+      },
+      {
+        "id": "ChIJ_fLDA_i32YgRtk21isKMWNM",
+        "name": "Mobile Mechanic R&R",
+        "city": "Miami, FL",
+        "score": 86.4,
+        "variant": "B",
+        "tier": "high",
+        "status": "drafted",
+        "opens": 0,
+        "clicks": 0,
+        "uniqueOpens": 0,
+        "uniqueClicks": 0,
+        "cost": 0.01,
+        "costBreakdown": {
+          "googlePlaces": 0.012,
+          "gemini": 0.001,
+          "scraping": 0
+        },
+        "geminiInputTokens": 560,
+        "geminiOutputTokens": 155,
+        "enriched": true,
+        "enrichmentLevel": "full",
+        "tone": "highly personalized, partnership-focused",
+        "emailPreview": "Subject: Keeping your bays moving at Mobile Mechanic R&R",
+        "generationMode": "full_enrichment",
+        "rating": 4.7,
+        "reviewCount": 228,
+        "distanceMiles": 3.7,
+        "hasWebsite": false,
+        "updatedAt": "2026-03-24T01:52:01.367Z",
+        "draftedAt": "2026-03-24T01:52:01.367Z",
+        "lastActivityAt": "2026-03-24T01:52:01.367Z",
+        "events": []
+      }
+    ],
+    "filters": {
+      "variants": [
+        "A",
+        "B"
+      ],
+      "cities": [
+        "Miami, FL"
+      ],
+      "enrichmentLevels": [
+        "enriched",
+        "not_enriched"
+      ],
+      "scoreRange": {
+        "min": 63.6,
+        "max": 98.9
+      }
+    }
+  },
+  "systemPerformance": {
+    "coreMetrics": {
+      "leadsProcessed": 20,
+      "leadsEnriched": 20,
+      "totalGeminiCalls": {
+        "value": 20,
+        "estimated": true
+      },
+      "averageApiCallsPerLead": {
+        "value": 4,
+        "estimated": true
+      },
+      "averageProcessingTimeSeconds": {
+        "value": 5.8,
+        "estimated": true
+      },
+      "costPerClick": 0.32,
+      "totalCost": 0.64,
+      "costSavedViaTiering": 11.76
+    },
+    "pipelineMetrics": {
+      "leadsProcessed": 20,
+      "leadsEnriched": 20,
+      "geminiCalls": 20,
+      "apiCallsPerLead": 4,
+      "averageProcessingTimeSeconds": 5.8
+    },
+    "visuals": {
+      "costVsLeadScore": [
+        {
+          "id": "75-100",
+          "label": "75-100",
+          "score": 92.8,
+          "cost": 0.03,
+          "variant": "75-100",
+          "ctr": 11.8
+        },
+        {
+          "id": "45-74",
+          "label": "45-74",
+          "score": 67.1,
+          "cost": 0.02,
+          "variant": "45-74",
+          "ctr": 0
+        }
+      ],
+      "enrichmentDistribution": [
+        {
+          "label": "Full enrichment",
+          "value": 20
+        },
+        {
+          "label": "Partial",
+          "value": 0
+        },
+        {
+          "label": "None",
+          "value": 0
+        }
+      ],
+      "costBreakdown": [
+        {
+          "label": "Google Places",
+          "value": 0.24
+        },
+        {
+          "label": "Playwright",
+          "value": 0.32
+        },
+        {
+          "label": "Gemini",
+          "value": 0.06
+        },
+        {
+          "label": "Total",
+          "value": 0.62
+        }
+      ]
+    },
+    "enrichmentEfficiency": {
+      "enrichedCtr": 10,
+      "remainingCtr": 0,
+      "costDelta": 0.03
+    },
+    "processingStrategy": [
+      "Top enriched leads → Full enrichment + Gemini personalization",
+      "Remaining leads → Template-based generation with lower-cost processing"
+    ],
+    "notes": [
+      "Gemini cost is derived from prompt/output token usage when the SDK exposes usage metadata, with character-based estimation as the fallback.",
+      "Google Places cost reflects geocode or Places city-center lookup, discovery text-search allocation, and Place Details for enriched leads.",
+      "Processing time and API call counts are centralized approximations derived from each lead path until provider-level telemetry is persisted."
+    ]
+  }
+}
