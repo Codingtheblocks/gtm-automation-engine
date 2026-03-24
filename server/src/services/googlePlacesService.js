@@ -59,6 +59,35 @@ const US_STATE_ABBREVIATIONS = {
   'district of columbia': 'DC',
 };
 
+const GOOGLE_PLACES_PRICING = {
+  geocodePerRequest: 0.005,
+  textSearchPerRequest: 0.032,
+  placeDetailsPerRequest: 0.005,
+};
+
+const PLACE_DETAILS_FIELDS = ['name', 'formatted_address', 'formatted_phone_number', 'website', 'rating', 'user_ratings_total', 'geometry', 'types', 'address_component'];
+
+const roundProviderCost = (value = 0) => Number(Number(value || 0).toFixed(6));
+
+export const getGooglePlacesCostBreakdown = ({
+  cityCenterLookupCost = 0,
+  textSearchRequestCount = 0,
+  leadCount = 1,
+  includePlaceDetails = false,
+} = {}) => {
+  const safeLeadCount = Math.max(leadCount || 0, 1);
+  const cityCenterLookupAllocatedCost = roundProviderCost(cityCenterLookupCost / safeLeadCount);
+  const discoveryTextSearchCost = roundProviderCost((textSearchRequestCount * GOOGLE_PLACES_PRICING.textSearchPerRequest) / safeLeadCount);
+  const placeDetailsCost = includePlaceDetails ? roundProviderCost(GOOGLE_PLACES_PRICING.placeDetailsPerRequest) : 0;
+
+  return {
+    cityCenterLookupAllocatedCost,
+    discoveryTextSearchCost,
+    placeDetailsCost,
+    total: roundProviderCost(cityCenterLookupAllocatedCost + discoveryTextSearchCost + placeDetailsCost),
+  };
+};
+
 const fetchJson = async (url) => {
   const response = await fetch(url);
 
@@ -108,6 +137,10 @@ const getCityCenterFromPlaces = async (city) => {
   return {
     formattedAddress: result.formatted_address || result.name || city,
     location: result.geometry?.location || null,
+    costMetadata: {
+      cityCenterLookupCost: roundProviderCost(GOOGLE_PLACES_PRICING.textSearchPerRequest),
+      lookupSource: 'places_text_search',
+    },
   };
 };
 
@@ -129,11 +162,15 @@ export const getCityCenter = async (city) => {
   return {
     formattedAddress: result.formatted_address,
     location: result.geometry.location,
+    costMetadata: {
+      cityCenterLookupCost: roundProviderCost(GOOGLE_PLACES_PRICING.geocodePerRequest),
+      lookupSource: 'geocode',
+    },
   };
 };
 
 export const getPlaceDetails = async (placeId) => {
-  const fields = ['name', 'formatted_address', 'formatted_phone_number', 'website', 'rating', 'user_ratings_total', 'geometry', 'types', 'address_component'].join(',');
+  const fields = PLACE_DETAILS_FIELDS.join(',');
   const url = `${PLACES_DETAILS_URL}?place_id=${encodeURIComponent(placeId)}&fields=${fields}&key=${env.googlePlacesApiKey}`;
   const data = await fetchJson(url);
 
@@ -145,6 +182,12 @@ export const getPlaceDetails = async (placeId) => {
     city: geography.cityState,
     state: geography.state,
     geography: geography.cityState,
+    providerCosts: {
+      googlePlaces: {
+        ...getGooglePlacesCostBreakdown({ includePlaceDetails: true }),
+        requestedFields: PLACE_DETAILS_FIELDS,
+      },
+    },
   };
 };
 
@@ -325,14 +368,32 @@ export const searchBusinesses = async ({ city, keyword }) => {
     radiusMiles *= 2;
   }
 
+  const visibleBusinesses = businesses.slice(0, env.targetMaxLeads);
+  const perLeadGooglePlacesCost = getGooglePlacesCostBreakdown({
+    cityCenterLookupCost: cityCenter.costMetadata?.cityCenterLookupCost || 0,
+    textSearchRequestCount: radiiUsedMiles.length,
+    leadCount: visibleBusinesses.length,
+  });
+
   return {
     cityCenter,
-    businesses: businesses.slice(0, env.targetMaxLeads),
+    businesses: visibleBusinesses.map((business) => ({
+      ...business,
+      providerCosts: {
+        googlePlaces: perLeadGooglePlacesCost,
+      },
+    })),
     searchMetadata: {
       radiiUsedMiles,
       targetMinLeads: env.targetMinLeads,
       targetMaxLeads: env.targetMaxLeads,
       expandedToRadiusMiles: radiiUsedMiles[radiiUsedMiles.length - 1] || env.initialSearchRadiusMiles,
+      googlePlaces: {
+        cityCenterLookupSource: cityCenter.costMetadata?.lookupSource || 'unknown',
+        cityCenterLookupCost: cityCenter.costMetadata?.cityCenterLookupCost || 0,
+        textSearchRequestCount: radiiUsedMiles.length,
+        perLead: perLeadGooglePlacesCost,
+      },
     },
   };
 };

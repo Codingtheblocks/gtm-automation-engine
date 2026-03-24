@@ -2,7 +2,6 @@ import { useState } from 'react';
 import SearchForm from '../components/SearchForm.jsx';
 import LeadTable from '../components/LeadTable.jsx';
 import SectionPanel from '../components/dashboard/SectionPanel.jsx';
-import LeadFilterBar from '../components/dashboard/LeadFilterBar.jsx';
 import { formatNumber } from '../utils/dashboardMetrics.js';
 
 function LeadsPage({
@@ -12,9 +11,8 @@ function LeadsPage({
   onSearch,
   leads,
   searchMetadata,
-  leadFilters,
-  leadFilterOptions,
-  onLeadFilterChange,
+  searchFilters,
+  onSearchFilterChange,
   generating,
   onGenerateEmails,
   generatingLeadId,
@@ -118,17 +116,29 @@ function LeadsPage({
           </button>
         )}
       >
-        <SearchForm form={form} loading={loading} onChange={onFormChange} onSubmit={onSearch} />
+        <SearchForm
+          form={{ ...form, ...searchFilters }}
+          loading={loading}
+          onChange={(event) => {
+            const fieldName = event.target.name;
+
+            if (fieldName === 'minimumRating' || fieldName === 'minRating' || fieldName === 'maxDistance') {
+              onSearchFilterChange(fieldName, event.target.value);
+              return;
+            }
+
+            onFormChange(event);
+          }}
+          onSubmit={onSearch}
+        />
       </SectionPanel>
 
       <SectionPanel
         eyebrow="Lead operations"
         title="Lead queue"
-        description="Filter by variant, score, enrichment, and city to find the next leads to work or the cohorts that need a strategy change."
+        description="Review the ranked queue and work the next best leads based on the active search constraints."
       >
-        <LeadFilterBar filters={leadFilters} options={leadFilterOptions} onChange={onLeadFilterChange} />
-
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-3">
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
             <p className="text-xs uppercase tracking-[0.2em] text-amber-200">Top enriched</p>
             <p className="mt-3 text-2xl font-semibold text-white">{formatNumber(enrichedCount)}</p>

@@ -3,7 +3,7 @@ import { getPlaceDetails, searchBusinesses } from '../services/googlePlacesServi
 import { enrichBusinessWebsite } from '../services/websiteEnrichmentService.js';
 import { calculateLeadScore, getScoreTier } from '../services/leadScoringService.js';
 import { haversineDistanceMiles } from '../utils/geo.js';
-import { generateOutreachEmail, getOfferVariantForLead, inferServicesBatch, regenerateLowScoreTemplates } from '../services/geminiService.js';
+import { generateOutreachEmail, getOfferVariantForLead, inferServicesBatchWithMetadata, regenerateLowScoreTemplates } from '../services/geminiService.js';
 import { getPromptSettings, readPromptFile, updatePromptSettings, companyUrlPromptPath } from '../services/promptService.js';
 import {
   buildTrackingTokens,
@@ -36,6 +36,85 @@ const logEnrichmentDiagnostics = ({ scope, lead, diagnostics }) => {
   console.info(message);
 };
 
+const roundProviderCost = (value = 0) => Number(Number(value || 0).toFixed(6));
+
+const createEmptyProviderCosts = () => ({
+  googlePlaces: {
+    cityCenterLookupAllocatedCost: 0,
+    discoveryTextSearchCost: 0,
+    placeDetailsCost: 0,
+    total: 0,
+  },
+  gemini: {
+    inputTokens: 0,
+    outputTokens: 0,
+    inputCost: 0,
+    outputCost: 0,
+    total: 0,
+    source: 'none',
+    operation: 'aggregate',
+  },
+  scraping: {
+    total: 0,
+    source: 'none',
+  },
+});
+
+const mergeProviderCosts = (...providerCostsList) => providerCostsList.reduce((aggregate, providerCosts) => {
+  if (!providerCosts) {
+    return aggregate;
+  }
+
+  const nextAggregate = {
+    ...aggregate,
+    googlePlaces: {
+      ...aggregate.googlePlaces,
+      ...(providerCosts.googlePlaces || {}),
+      cityCenterLookupAllocatedCost: roundProviderCost(aggregate.googlePlaces.cityCenterLookupAllocatedCost + Number(providerCosts.googlePlaces?.cityCenterLookupAllocatedCost || 0)),
+      discoveryTextSearchCost: roundProviderCost(aggregate.googlePlaces.discoveryTextSearchCost + Number(providerCosts.googlePlaces?.discoveryTextSearchCost || 0)),
+      placeDetailsCost: roundProviderCost(aggregate.googlePlaces.placeDetailsCost + Number(providerCosts.googlePlaces?.placeDetailsCost || 0)),
+    },
+    gemini: {
+      ...aggregate.gemini,
+      ...(providerCosts.gemini || {}),
+      inputTokens: Number(aggregate.gemini.inputTokens || 0) + Number(providerCosts.gemini?.inputTokens || 0),
+      outputTokens: Number(aggregate.gemini.outputTokens || 0) + Number(providerCosts.gemini?.outputTokens || 0),
+      inputCost: roundProviderCost(aggregate.gemini.inputCost + Number(providerCosts.gemini?.inputCost || 0)),
+      outputCost: roundProviderCost(aggregate.gemini.outputCost + Number(providerCosts.gemini?.outputCost || 0)),
+      total: roundProviderCost(aggregate.gemini.total + Number(providerCosts.gemini?.total || 0)),
+      source: providerCosts.gemini?.source || aggregate.gemini.source,
+      operation: providerCosts.gemini?.operation || aggregate.gemini.operation,
+    },
+    scraping: {
+      ...aggregate.scraping,
+      ...(providerCosts.scraping || {}),
+      total: roundProviderCost(aggregate.scraping.total + Number(providerCosts.scraping?.total || 0)),
+      source: providerCosts.scraping?.source || aggregate.scraping.source,
+    },
+  };
+
+  nextAggregate.googlePlaces.total = roundProviderCost(
+    Number(nextAggregate.googlePlaces.cityCenterLookupAllocatedCost || 0)
+    + Number(nextAggregate.googlePlaces.discoveryTextSearchCost || 0)
+    + Number(nextAggregate.googlePlaces.placeDetailsCost || 0),
+  );
+
+  return nextAggregate;
+}, createEmptyProviderCosts());
+
+const getEstimatedLeadCost = (lead) => {
+  const providerCosts = mergeProviderCosts(
+    lead.providerCosts,
+    lead.enrichment?.providerCosts,
+  );
+
+  return roundProviderCost(
+    Number(providerCosts.googlePlaces.total || 0)
+    + Number(providerCosts.gemini.total || 0)
+    + Number(providerCosts.scraping.total || 0),
+  );
+};
+
 const buildLeadRecord = ({ business, cityCenter, enrichmentCount }) => {
   const distanceMiles = haversineDistanceMiles(cityCenter.location, business.location);
   const score = calculateLeadScore({
@@ -58,7 +137,9 @@ const buildLeadRecord = ({ business, cityCenter, enrichmentCount }) => {
       homepageText: '',
       homepageSummary: '',
       inferredServices: [],
+      providerCosts: createEmptyProviderCosts(),
     },
+    providerCosts: mergeProviderCosts(business.providerCosts),
     enrichmentStatus: business.enrichmentStatus || 'lightweight',
     isTopEnrichedCandidate: false,
     enrichmentCount,
@@ -95,12 +176,14 @@ const enrichLead = async (lead) => {
     reviewCount: details.user_ratings_total || lead.reviewCount || 0,
     location: details.geometry?.location || lead.location || null,
     category: details.types?.[0] || lead.category,
+    providerCosts: mergeProviderCosts(lead.providerCosts, details.providerCosts),
   };
 
   const enrichment = detailedLead.website ? await enrichBusinessWebsite(detailedLead) : {
     homepageText: '',
     homepageSummary: '',
     inferredServices: [],
+    providerCosts: createEmptyProviderCosts(),
     diagnostics: {
       stage: 'place_details',
       status: 'skipped',
@@ -123,7 +206,7 @@ const enrichLead = async (lead) => {
 };
 
 const applyBatchedServices = async (leads) => {
-  const serviceMap = await inferServicesBatch(
+  const { servicesById, providerCostsById } = await inferServicesBatchWithMetadata(
     leads.map((lead) => ({
       id: lead.id,
       businessName: lead.name,
@@ -133,9 +216,11 @@ const applyBatchedServices = async (leads) => {
 
   return leads.map((lead) => ({
     ...lead,
+    providerCosts: mergeProviderCosts(lead.providerCosts, providerCostsById.get(lead.id)),
     enrichment: {
       ...lead.enrichment,
-      inferredServices: serviceMap.get(lead.id) || lead.enrichment?.inferredServices || [],
+      inferredServices: servicesById.get(lead.id) || lead.enrichment?.inferredServices || [],
+      providerCosts: mergeProviderCosts(lead.enrichment?.providerCosts, providerCostsById.get(lead.id)),
       diagnostics: lead.enrichment?.diagnostics || null,
     },
   }));
@@ -153,18 +238,6 @@ const normalizeDestinationUrl = (value = '') => {
   }
 
   return `https://${normalizedValue}`;
-};
-
-const getEstimatedLeadCost = (lead) => {
-  if (lead.generationMode === 'prompt_gemini') {
-    return 0.62;
-  }
-
-  if (lead.enrichmentStatus === 'enriched') {
-    return 0.18;
-  }
-
-  return 0.04;
 };
 
 const buildGeneratedEmailLeadRecord = async (lead) => {
@@ -191,35 +264,8 @@ const buildGeneratedEmailLeadRecord = async (lead) => {
     trackingUrl,
     openTrackingUrl,
   });
-  const destinationUrl = normalizeDestinationUrl(await readPromptFile(companyUrlPromptPath));
-  const trackingRecord = saveTrackedEmail({
-    lead: fullyEnrichedLead,
-    variant: emailResult.offerVariant,
-    generationMode: emailResult.generationMode,
-    outreachTone: emailResult.tone,
-    estimatedCost: getEstimatedLeadCost({ ...fullyEnrichedLead, generationMode: emailResult.generationMode }),
-    destinationUrl,
-    trackingUrl,
-    openTrackingUrl,
-    clickToken,
-    openToken,
-    emailText: emailResult.generatedEmail,
-    emailHtml: emailResult.generatedEmailHtml || '',
-  });
-
   const [leadWithServices] = await applyBatchedServices([{
-    id: fullyEnrichedLead.id,
-    placeId: fullyEnrichedLead.placeId || fullyEnrichedLead.id,
-    name: fullyEnrichedLead.name || lead.name || '',
-    website: fullyEnrichedLead.website,
-    phone: fullyEnrichedLead.phone,
-    address: fullyEnrichedLead.address,
-    city: fullyEnrichedLead.city,
-    state: fullyEnrichedLead.state,
-    category: fullyEnrichedLead.category,
-    enrichment: fullyEnrichedLead.enrichment,
-    enrichmentStatus: 'enriched',
-    leadScore: fullyEnrichedLead.leadScore,
+    ...fullyEnrichedLead,
     generatedEmail: emailResult.generatedEmail,
     offerVariant: emailResult.offerVariant,
     outreachTone: emailResult.tone,
@@ -229,18 +275,50 @@ const buildGeneratedEmailLeadRecord = async (lead) => {
     geminiDetails: emailResult.geminiDetails,
     templatePath: emailResult.templatePath,
     generatedEmailHtml: emailResult.generatedEmailHtml || '',
-    trackingUrl: trackingRecord.trackingUrl,
-    openTrackingUrl: trackingRecord.openTrackingUrl,
-    destinationUrl: trackingRecord.destinationUrl,
-    estimatedCost: trackingRecord.estimatedCost,
   }]);
+  const providerCosts = mergeProviderCosts(
+    leadWithServices.providerCosts,
+    leadWithServices.enrichment?.providerCosts,
+    emailResult.providerCosts,
+  );
+  const estimatedCost = getEstimatedLeadCost({
+    providerCosts,
+    enrichment: {
+      providerCosts: createEmptyProviderCosts(),
+    },
+  });
+  const destinationUrl = normalizeDestinationUrl(await readPromptFile(companyUrlPromptPath));
+  const trackingRecord = saveTrackedEmail({
+    lead: {
+      ...fullyEnrichedLead,
+      ...leadWithServices,
+      providerCosts,
+    },
+    variant: emailResult.offerVariant,
+    generationMode: emailResult.generationMode,
+    outreachTone: emailResult.tone,
+    estimatedCost,
+    providerCosts,
+    destinationUrl,
+    trackingUrl,
+    openTrackingUrl,
+    clickToken,
+    openToken,
+    emailText: emailResult.generatedEmail,
+    emailHtml: emailResult.generatedEmailHtml || '',
+  });
 
   return {
     ...lead,
     ...fullyEnrichedLead,
     ...leadWithServices,
+    providerCosts,
     enrichment: leadWithServices.enrichment,
     enrichmentStatus: 'enriched',
+    trackingUrl: trackingRecord.trackingUrl,
+    openTrackingUrl: trackingRecord.openTrackingUrl,
+    destinationUrl: trackingRecord.destinationUrl,
+    estimatedCost: trackingRecord.estimatedCost,
   };
 };
 

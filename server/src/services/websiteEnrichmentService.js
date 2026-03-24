@@ -1,6 +1,8 @@
 import { chromium } from 'playwright';
-import { summarizeHomepage } from './geminiService.js';
+import { summarizeHomepageWithMetadata } from './geminiService.js';
 import { cleanText, truncateText } from '../utils/text.js';
+
+const PLAYWRIGHT_SCRAPE_COST = 0.02;
 
 export const enrichBusinessWebsite = async (business) => {
   if (!business.website) {
@@ -10,6 +12,21 @@ export const enrichBusinessWebsite = async (business) => {
       homepageText: '',
       homepageSummary: '',
       inferredServices: [],
+      providerCosts: {
+        scraping: {
+          total: 0,
+          source: 'missing_website',
+        },
+        gemini: {
+          inputTokens: 0,
+          outputTokens: 0,
+          inputCost: 0,
+          outputCost: 0,
+          total: 0,
+          source: 'missing_website',
+          operation: 'homepage_summary',
+        },
+      },
       diagnostics: {
         stage: 'place_details',
         status: 'skipped',
@@ -35,7 +52,7 @@ export const enrichBusinessWebsite = async (business) => {
 
     const bodyText = await page.locator('body').innerText();
     const homepageText = truncateText(cleanText(bodyText), 5000);
-    const homepageSummary = await summarizeHomepage({
+    const homepageSummaryResult = await summarizeHomepageWithMetadata({
       businessName: business.name,
       homepageText,
     });
@@ -43,8 +60,23 @@ export const enrichBusinessWebsite = async (business) => {
 
     return {
       homepageText,
-      homepageSummary,
+      homepageSummary: homepageSummaryResult.summary,
       inferredServices: [],
+      providerCosts: {
+        scraping: {
+          total: PLAYWRIGHT_SCRAPE_COST,
+          source: 'playwright',
+        },
+        gemini: homepageSummaryResult.providerCosts?.gemini || {
+          inputTokens: 0,
+          outputTokens: 0,
+          inputCost: 0,
+          outputCost: 0,
+          total: 0,
+          source: 'missing_usage',
+          operation: 'homepage_summary',
+        },
+      },
       diagnostics: {
         stage: 'website_enrichment',
         status: 'success',
@@ -59,6 +91,21 @@ export const enrichBusinessWebsite = async (business) => {
       homepageText: '',
       homepageSummary: '',
       inferredServices: [],
+      providerCosts: {
+        scraping: {
+          total: 0,
+          source: 'playwright_failed',
+        },
+        gemini: {
+          inputTokens: 0,
+          outputTokens: 0,
+          inputCost: 0,
+          outputCost: 0,
+          total: 0,
+          source: 'playwright_failed',
+          operation: 'homepage_summary',
+        },
+      },
       diagnostics: {
         stage: 'website_enrichment',
         status: 'failed',

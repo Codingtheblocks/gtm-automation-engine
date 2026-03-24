@@ -22,6 +22,10 @@ const lowScoreTemplateFilenameByOffer = {
   'offer_b.md': 'low_score_offer_b_template.md',
 };
 const cachedLowScoreTemplates = new Map();
+const GEMINI_PRICING = {
+  inputPerMillionTokens: 0.5,
+  outputPerMillionTokens: 3,
+};
 
 const getModel = () => {
   if (!env.geminiApiKey) {
@@ -67,6 +71,73 @@ const buildGeminiDiagnostics = ({ usedGemini, reason = '', details = '' }) => ({
   reason,
   details,
 });
+
+const roundProviderCost = (value = 0) => Number(Number(value || 0).toFixed(6));
+
+const estimateTokenCount = (value = '') => Math.max(0, Math.ceil(String(value || '').length / 4));
+
+const buildZeroGeminiUsage = (source = 'none', operation = '') => ({
+  inputTokens: 0,
+  outputTokens: 0,
+  inputCost: 0,
+  outputCost: 0,
+  total: 0,
+  source,
+  operation,
+});
+
+const buildGeminiUsageFromResult = ({ result, prompt = '', outputText = '', operation = '' }) => {
+  const usageMetadata = result?.response?.usageMetadata || result?.usageMetadata || {};
+  const hasUsageMetadata = Number.isFinite(Number(usageMetadata.promptTokenCount)) || Number.isFinite(Number(usageMetadata.candidatesTokenCount));
+  const inputTokens = hasUsageMetadata ? Number(usageMetadata.promptTokenCount || 0) : estimateTokenCount(prompt);
+  const outputTokens = hasUsageMetadata ? Number(usageMetadata.candidatesTokenCount || 0) : estimateTokenCount(outputText);
+  const inputCost = roundProviderCost((inputTokens / 1_000_000) * GEMINI_PRICING.inputPerMillionTokens);
+  const outputCost = roundProviderCost((outputTokens / 1_000_000) * GEMINI_PRICING.outputPerMillionTokens);
+
+  return {
+    inputTokens,
+    outputTokens,
+    inputCost,
+    outputCost,
+    total: roundProviderCost(inputCost + outputCost),
+    source: hasUsageMetadata ? 'usage_metadata' : 'estimated_characters',
+    operation,
+  };
+};
+
+const allocateGeminiUsageAcrossBusinesses = ({ candidates = [], geminiUsage, operation = '' }) => {
+  if (!candidates.length) {
+    return new Map();
+  }
+
+  const weights = candidates.map((business) => Math.max(1, estimateTokenCount(business.homepageText || business.businessName || business.id || '')));
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0) || candidates.length;
+
+  return new Map(
+    candidates.map((business, index) => {
+      const share = weights[index] / totalWeight;
+      const inputTokens = Math.round(geminiUsage.inputTokens * share);
+      const outputTokens = Math.round(geminiUsage.outputTokens * share);
+      const inputCost = roundProviderCost(geminiUsage.inputCost * share);
+      const outputCost = roundProviderCost(geminiUsage.outputCost * share);
+
+      return [
+        business.id,
+        {
+          gemini: {
+            inputTokens,
+            outputTokens,
+            inputCost,
+            outputCost,
+            total: roundProviderCost(inputCost + outputCost),
+            source: geminiUsage.source,
+            operation,
+          },
+        },
+      ];
+    }),
+  );
+};
 
 const logGeminiDiagnostics = ({ scope, diagnostics }) => {
   const message = diagnostics.details
@@ -423,17 +494,25 @@ export const inferServices = async ({ businessName, homepageText }) => {
   }
 };
 
-export const inferServicesBatch = async (businesses) => {
+export const inferServicesBatchWithMetadata = async (businesses) => {
   const candidates = businesses.filter((business) => business.homepageText);
 
   if (!candidates.length) {
-    return new Map();
+    return {
+      servicesById: new Map(),
+      providerCostsById: new Map(),
+    };
   }
 
   if (!model) {
-    return new Map(
-      candidates.map((business) => [business.id, fallbackServicesFromText(business.homepageText)]),
-    );
+    return {
+      servicesById: new Map(
+        candidates.map((business) => [business.id, fallbackServicesFromText(business.homepageText)]),
+      ),
+      providerCostsById: new Map(
+        candidates.map((business) => [business.id, { gemini: buildZeroGeminiUsage('model_unavailable', 'infer_services_batch') }]),
+      ),
+    };
   }
 
   const promptPayload = candidates.map((business) => ({
@@ -448,44 +527,99 @@ export const inferServicesBatch = async (businesses) => {
     const result = await model.generateContent(prompt);
     const responseText = result.response.text().trim();
     const parsed = safeJsonParse(responseText);
+    const geminiUsage = buildGeminiUsageFromResult({
+      result,
+      prompt,
+      outputText: responseText,
+      operation: 'infer_services_batch',
+    });
 
     if (!Array.isArray(parsed)) {
       throw new Error('Invalid batch service response');
     }
 
-    return new Map(
-      candidates.map((business) => {
-        const match = parsed.find((item) => item?.id === business.id);
-        return [
-          business.id,
-          Array.isArray(match?.services) ? match.services : fallbackServicesFromText(business.homepageText),
-        ];
+    return {
+      servicesById: new Map(
+        candidates.map((business) => {
+          const match = parsed.find((item) => item?.id === business.id);
+          return [
+            business.id,
+            Array.isArray(match?.services) ? match.services : fallbackServicesFromText(business.homepageText),
+          ];
+        }),
+      ),
+      providerCostsById: allocateGeminiUsageAcrossBusinesses({
+        candidates,
+        geminiUsage,
+        operation: 'infer_services_batch',
       }),
-    );
+    };
   } catch {
-    return new Map(
-      candidates.map((business) => [business.id, fallbackServicesFromText(business.homepageText)]),
-    );
+    return {
+      servicesById: new Map(
+        candidates.map((business) => [business.id, fallbackServicesFromText(business.homepageText)]),
+      ),
+      providerCostsById: new Map(
+        candidates.map((business) => [business.id, { gemini: buildZeroGeminiUsage('generation_failed', 'infer_services_batch') }]),
+      ),
+    };
   }
 };
 
-export const summarizeHomepage = async ({ businessName, homepageText }) => {
+export const inferServicesBatch = async (businesses) => {
+  const result = await inferServicesBatchWithMetadata(businesses);
+  return result.servicesById;
+};
+
+export const summarizeHomepageWithMetadata = async ({ businessName, homepageText }) => {
   if (!homepageText) {
-    return '';
+    return {
+      summary: '',
+      providerCosts: {
+        gemini: buildZeroGeminiUsage('no_homepage_text', 'homepage_summary'),
+      },
+    };
   }
 
   if (!model) {
-    return homepageText.slice(0, 600);
+    return {
+      summary: homepageText.slice(0, 600),
+      providerCosts: {
+        gemini: buildZeroGeminiUsage('model_unavailable', 'homepage_summary'),
+      },
+    };
   }
 
   const prompt = `Summarize the public homepage copy for ${businessName} in 2 concise sentences for CRM enrichment. Focus on positioning, specialties, and customer value. Homepage text: ${homepageText}`;
 
   try {
     const result = await model.generateContent(prompt);
-    return result.response.text().trim();
+    const summary = result.response.text().trim();
+
+    return {
+      summary,
+      providerCosts: {
+        gemini: buildGeminiUsageFromResult({
+          result,
+          prompt,
+          outputText: summary,
+          operation: 'homepage_summary',
+        }),
+      },
+    };
   } catch {
-    return homepageText.slice(0, 600);
+    return {
+      summary: homepageText.slice(0, 600),
+      providerCosts: {
+        gemini: buildZeroGeminiUsage('generation_failed', 'homepage_summary'),
+      },
+    };
   }
+};
+
+export const summarizeHomepage = async ({ businessName, homepageText }) => {
+  const result = await summarizeHomepageWithMetadata({ businessName, homepageText });
+  return result.summary;
 };
 
 export const generateOutreachEmail = async ({
@@ -519,12 +653,12 @@ export const generateOutreachEmail = async ({
     });
 
     const renderedEmail = renderLowScoreTemplate({
-        template: templateResult.template,
-        businessName,
-        location,
-        servicesSummary,
-        companyName,
-      });
+      template: templateResult.template,
+      businessName,
+      location,
+      servicesSummary,
+      companyName,
+    });
     const trackedEmail = appendTrackingContent({
       emailText: renderedEmail,
       trackingUrl,
@@ -543,6 +677,9 @@ export const generateOutreachEmail = async ({
       geminiReason: templateResult.geminiDiagnostics?.reason || '',
       geminiDetails: templateResult.geminiDiagnostics?.details || '',
       templatePath: templateResult.templatePath,
+      providerCosts: {
+        gemini: buildZeroGeminiUsage('template_reused', 'outreach_email'),
+      },
     };
   }
 
@@ -571,6 +708,9 @@ export const generateOutreachEmail = async ({
       geminiReason: geminiDiagnostics.reason,
       geminiDetails: geminiDiagnostics.details,
       templatePath: '',
+      providerCosts: {
+        gemini: buildZeroGeminiUsage('model_unavailable', 'outreach_email'),
+      },
     };
   }
 
@@ -578,6 +718,13 @@ export const generateOutreachEmail = async ({
 
   try {
     const result = await model.generateContent(prompt);
+    const generatedEmailText = result.response.text().trim();
+    const geminiUsage = buildGeminiUsageFromResult({
+      result,
+      prompt,
+      outputText: generatedEmailText,
+      operation: 'outreach_email',
+    });
     const geminiDiagnostics = buildGeminiDiagnostics({
       usedGemini: true,
       reason: 'email_generated',
@@ -585,7 +732,7 @@ export const generateOutreachEmail = async ({
     });
     logGeminiDiagnostics({ scope: 'email', diagnostics: geminiDiagnostics });
     const trackedEmail = appendTrackingContent({
-      emailText: result.response.text().trim(),
+      emailText: generatedEmailText,
       trackingUrl,
       openTrackingUrl,
     });
@@ -602,6 +749,9 @@ export const generateOutreachEmail = async ({
       geminiReason: geminiDiagnostics.reason,
       geminiDetails: geminiDiagnostics.details,
       templatePath: '',
+      providerCosts: {
+        gemini: geminiUsage,
+      },
     };
   } catch (error) {
     const geminiDiagnostics = buildGeminiDiagnostics({
@@ -628,6 +778,9 @@ export const generateOutreachEmail = async ({
       geminiReason: geminiDiagnostics.reason,
       geminiDetails: geminiDiagnostics.details,
       templatePath: '',
+      providerCosts: {
+        gemini: buildZeroGeminiUsage('generation_failed', 'outreach_email'),
+      },
     };
   }
 };

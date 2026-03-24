@@ -194,18 +194,13 @@ export const getDefaultLeadFilters = () => ({
   enrichmentLevel: 'all',
   minScore: '0',
   maxScore: '100',
+  minimumRating: '1',
 });
 
 export const filterOperationalLeads = ({ leads, filters, searchFilters }) => leads
-  .filter((lead) => Number(lead.rating || 0) >= Number(searchFilters?.minRating || 0))
+  .filter((lead) => Number(lead.rating || 0) >= Number(searchFilters?.minimumRating || 1))
+  .filter((lead) => Number(lead.reviewCount || 0) >= Number(searchFilters?.minRating || 0))
   .filter((lead) => lead.distanceMiles === null || lead.distanceMiles === undefined || Number(lead.distanceMiles) <= Number(searchFilters?.maxDistance || 50))
-  .filter((lead) => filters.variant === 'all' || lead.variant === filters.variant)
-  .filter((lead) => filters.city === 'all' || (lead.city || 'Unknown') === filters.city)
-  .filter((lead) => filters.enrichmentLevel === 'all'
-    || (filters.enrichmentLevel === 'enriched' && lead.enriched)
-    || (filters.enrichmentLevel === 'not_enriched' && !lead.enriched))
-  .filter((lead) => Number(lead.leadScore ?? lead.score ?? 0) >= Number(filters.minScore || 0))
-  .filter((lead) => Number(lead.leadScore ?? lead.score ?? 0) <= Number(filters.maxScore || 100))
   .sort((left, right) => {
     const scoreDelta = Number(right.leadScore ?? right.score ?? 0) - Number(left.leadScore ?? left.score ?? 0);
 

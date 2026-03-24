@@ -202,40 +202,11 @@ const getModeledReplies = ({ draftedLeads, uniqueClicks, uniqueOpens }) => {
   return Math.min(uniqueClicks, Math.max(0, Math.round(uniqueClicks * 0.22 + uniqueOpens * 0.06)));
 };
 
-const getCostBreakdownWeights = (generationMode) => {
-  if (generationMode === 'full_enrichment') {
-    return {
-      googlePlaces: 0.14,
-      gemini: 0.58,
-      scraping: 0.28,
-    };
-  }
-
-  if (generationMode === 'template') {
-    return {
-      googlePlaces: 0.28,
-      gemini: 0.08,
-      scraping: 0.64,
-    };
-  }
-
-  return {
-    googlePlaces: 0.75,
-    gemini: 0,
-    scraping: 0.25,
-  };
-};
-
-const getCostBreakdown = (lead) => {
-  const weights = getCostBreakdownWeights(lead.generationMode);
-  const totalCost = toNumber(lead.estimatedCost, 0);
-
-  return {
-    googlePlaces: roundMetric(totalCost * weights.googlePlaces, 3),
-    gemini: roundMetric(totalCost * weights.gemini, 3),
-    scraping: roundMetric(totalCost * weights.scraping, 3),
-  };
-};
+const getCostBreakdown = (lead) => ({
+  googlePlaces: roundMetric(lead.googlePlacesCost, 3),
+  gemini: roundMetric(lead.geminiCost, 3),
+  scraping: roundMetric(lead.scrapingCost, 3),
+});
 
 const createEmptyAggregate = (label) => ({
   label,
@@ -258,22 +229,24 @@ const summarizeRows = (rows) => {
     return result;
   }, createEmptyAggregate('summary'));
   const engagedLeads = rows.filter((lead) => lead.uniqueOpens > 0 || lead.uniqueClicks > 0).length;
-  const totalEngagements = aggregate.totalOpens + aggregate.totalClicks;
+  const safeUniqueClicks = Math.min(aggregate.uniqueClicks, aggregate.uniqueOpens);
+  const totalEngagements = engagedLeads;
 
   const modeledReplies = getModeledReplies({
     draftedLeads: aggregate.leads,
-    uniqueClicks: aggregate.uniqueClicks,
+    uniqueClicks: safeUniqueClicks,
     uniqueOpens: aggregate.uniqueOpens,
   });
 
   return {
     ...aggregate,
+    uniqueClicks: safeUniqueClicks,
     totalCost: roundMetric(aggregate.totalCost, 2),
     costPerLead: roundMetric(divide(aggregate.totalCost, aggregate.leads), 2),
     openRate: toPercent(aggregate.uniqueOpens, aggregate.leads),
-    ctr: toPercent(aggregate.uniqueClicks, aggregate.leads),
-    ctor: toPercent(aggregate.uniqueClicks, aggregate.uniqueOpens),
-    costPerClick: roundMetric(divide(aggregate.totalCost, aggregate.uniqueClicks), 2),
+    ctr: toPercent(safeUniqueClicks, aggregate.leads),
+    ctor: toPercent(safeUniqueClicks, aggregate.uniqueOpens),
+    costPerClick: roundMetric(divide(aggregate.totalCost, safeUniqueClicks), 2),
     costPerEngagement: roundMetric(divide(aggregate.totalCost, totalEngagements), 2),
     engagementRate: toPercent(engagedLeads, aggregate.leads),
     engagedLeads,
@@ -603,6 +576,11 @@ const getTrackedLeadFacts = () => {
       l.enrichment_status,
       l.has_website,
       l.outreach_tone,
+      l.google_places_cost,
+      l.gemini_cost,
+      l.scraping_cost,
+      l.gemini_input_tokens,
+      l.gemini_output_tokens,
       e.email_text,
       e.created_at AS drafted_at,
       MAX(ev.timestamp) AS last_activity_at,
@@ -628,6 +606,11 @@ const getTrackedLeadFacts = () => {
       l.enrichment_status,
       l.has_website,
       l.outreach_tone,
+      l.google_places_cost,
+      l.gemini_cost,
+      l.scraping_cost,
+      l.gemini_input_tokens,
+      l.gemini_output_tokens,
       e.email_text,
       e.created_at
     ORDER BY l.updated_at DESC, l.score DESC
@@ -655,6 +638,11 @@ const getTrackedLeadFacts = () => {
       enrichmentStatus: row.enrichment_status || 'unknown',
       hasWebsite: Boolean(row.has_website),
       outreachTone: row.outreach_tone || '',
+      googlePlacesCost: roundMetric(row.google_places_cost, 6),
+      geminiCost: roundMetric(row.gemini_cost, 6),
+      scrapingCost: roundMetric(row.scraping_cost, 6),
+      geminiInputTokens: Math.max(0, Math.round(toNumber(row.gemini_input_tokens, 0))),
+      geminiOutputTokens: Math.max(0, Math.round(toNumber(row.gemini_output_tokens, 0))),
       emailPreview: String(row.email_text || '').split('\n').find(Boolean) || '',
       totalOpens: Math.max(0, Math.round(toNumber(row.total_opens, 0))),
       totalClicks: Math.max(0, Math.round(toNumber(row.total_clicks, 0))),
@@ -841,6 +829,9 @@ export const getDashboardLeads = () => {
       uniqueOpens: row.uniqueOpens,
       uniqueClicks: row.uniqueClicks,
       cost: row.estimatedCost,
+      costBreakdown: row.costBreakdown,
+      geminiInputTokens: row.geminiInputTokens,
+      geminiOutputTokens: row.geminiOutputTokens,
       enriched: row.enrichmentLevel !== 'none',
       enrichmentLevel: row.enrichmentLevel,
       tone: row.outreachTone,
@@ -969,7 +960,8 @@ export const getSystemPerformance = () => {
       'Remaining leads → Template-based generation with lower-cost processing',
     ],
     notes: [
-      'Gemini call counts are estimated from personalized drafts plus one reusable template-generation pass per low-score variant.',
+      'Gemini cost is derived from prompt/output token usage when the SDK exposes usage metadata, with character-based estimation as the fallback.',
+      'Google Places cost reflects geocode or Places city-center lookup, discovery text-search allocation, and Place Details for enriched leads.',
       'Processing time and API call counts are centralized approximations derived from each lead path until provider-level telemetry is persisted.',
     ],
   };
@@ -987,7 +979,18 @@ export const initializeTrackingDatabase = async () => {
       variant TEXT,
       generation_mode TEXT,
       estimated_cost REAL DEFAULT 0,
-      updated_at TEXT
+      updated_at TEXT,
+      rating REAL DEFAULT 0,
+      review_count INTEGER DEFAULT 0,
+      distance_miles REAL,
+      enrichment_status TEXT DEFAULT 'unknown',
+      has_website INTEGER DEFAULT 0,
+      outreach_tone TEXT DEFAULT '',
+      google_places_cost REAL DEFAULT 0,
+      gemini_cost REAL DEFAULT 0,
+      scraping_cost REAL DEFAULT 0,
+      gemini_input_tokens INTEGER DEFAULT 0,
+      gemini_output_tokens INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS emails (
@@ -1032,6 +1035,11 @@ export const initializeTrackingDatabase = async () => {
   ensureTableColumn('leads', 'enrichment_status', "TEXT DEFAULT 'unknown'");
   ensureTableColumn('leads', 'has_website', 'INTEGER DEFAULT 0');
   ensureTableColumn('leads', 'outreach_tone', "TEXT DEFAULT ''");
+  ensureTableColumn('leads', 'google_places_cost', 'REAL DEFAULT 0');
+  ensureTableColumn('leads', 'gemini_cost', 'REAL DEFAULT 0');
+  ensureTableColumn('leads', 'scraping_cost', 'REAL DEFAULT 0');
+  ensureTableColumn('leads', 'gemini_input_tokens', 'INTEGER DEFAULT 0');
+  ensureTableColumn('leads', 'gemini_output_tokens', 'INTEGER DEFAULT 0');
 };
 
 export const buildTrackingTokens = ({ leadId, variant }) => {
@@ -1052,6 +1060,7 @@ export const saveTrackedEmail = ({
   generationMode,
   outreachTone = '',
   estimatedCost = 0,
+  providerCosts = {},
   destinationUrl,
   trackingUrl,
   openTrackingUrl,
@@ -1063,13 +1072,18 @@ export const saveTrackedEmail = ({
   const db = getDatabase();
   const timestamp = new Date().toISOString();
   const emailId = crypto.randomUUID();
-  const city = normalizeLeadCity(lead);
+  const city = normalizeLeadCity({ city: lead.city });
   const canonicalVariant = normalizeTrackedVariant(variant, {
     id: lead.id,
     name: lead.name,
     city,
   });
   const generationModeBucket = getGenerationModeBucket(generationMode);
+  const googlePlacesCost = Number(providerCosts.googlePlaces?.total || lead.providerCosts?.googlePlaces?.total || 0);
+  const geminiCost = Number(providerCosts.gemini?.total || lead.providerCosts?.gemini?.total || 0);
+  const scrapingCost = Number(providerCosts.scraping?.total || lead.providerCosts?.scraping?.total || 0);
+  const geminiInputTokens = Math.round(Number(providerCosts.gemini?.inputTokens || lead.providerCosts?.gemini?.inputTokens || 0));
+  const geminiOutputTokens = Math.round(Number(providerCosts.gemini?.outputTokens || lead.providerCosts?.gemini?.outputTokens || 0));
 
   db.prepare(`
     INSERT INTO leads (
@@ -1086,9 +1100,14 @@ export const saveTrackedEmail = ({
       distance_miles,
       enrichment_status,
       has_website,
-      outreach_tone
+      outreach_tone,
+      google_places_cost,
+      gemini_cost,
+      scraping_cost,
+      gemini_input_tokens,
+      gemini_output_tokens
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       city = excluded.city,
@@ -1102,7 +1121,12 @@ export const saveTrackedEmail = ({
       distance_miles = excluded.distance_miles,
       enrichment_status = excluded.enrichment_status,
       has_website = excluded.has_website,
-      outreach_tone = excluded.outreach_tone
+      outreach_tone = excluded.outreach_tone,
+      google_places_cost = excluded.google_places_cost,
+      gemini_cost = excluded.gemini_cost,
+      scraping_cost = excluded.scraping_cost,
+      gemini_input_tokens = excluded.gemini_input_tokens,
+      gemini_output_tokens = excluded.gemini_output_tokens
   `).run(
     lead.id,
     lead.name || '',
@@ -1118,6 +1142,11 @@ export const saveTrackedEmail = ({
     lead.enrichmentStatus || 'unknown',
     lead.website ? 1 : 0,
     outreachTone || '',
+    googlePlacesCost,
+    geminiCost,
+    scrapingCost,
+    geminiInputTokens,
+    geminiOutputTokens,
   );
 
   db.prepare(`
@@ -1262,6 +1291,35 @@ export const resolveTrackingToken = ({ token, expectedEventType }) => {
 
 export const recordTrackingEvent = ({ leadId, emailId, eventType, variant, generationMode, userAgent = '', ipAddress = '' }) => {
   const db = getDatabase();
+  const timestamp = new Date().toISOString();
+
+  if (eventType === 'click') {
+    const existingOpen = db.prepare(`
+      SELECT id
+      FROM events
+      WHERE lead_id = ?
+        AND email_id = ?
+        AND event_type = 'open'
+      LIMIT 1
+    `).get(leadId, emailId);
+
+    if (!existingOpen) {
+      db.prepare(`
+        INSERT INTO events (id, lead_id, email_id, event_type, timestamp, variant, generation_mode, user_agent, ip_address)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        crypto.randomUUID(),
+        leadId,
+        emailId,
+        'open',
+        timestamp,
+        variant,
+        generationMode,
+        userAgent || 'auto_open_from_click',
+        ipAddress,
+      );
+    }
+  }
 
   db.prepare(`
     INSERT INTO events (id, lead_id, email_id, event_type, timestamp, variant, generation_mode, user_agent, ip_address)
@@ -1271,7 +1329,7 @@ export const recordTrackingEvent = ({ leadId, emailId, eventType, variant, gener
     leadId,
     emailId,
     eventType,
-    toIsoString(),
+    timestamp,
     variant,
     generationMode,
     userAgent,

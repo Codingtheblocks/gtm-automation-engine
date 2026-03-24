@@ -41,7 +41,7 @@ const getInitialDashboardState = () => {
   if (typeof window === 'undefined') {
     return {
       form: { city: '', keyword: 'car repair' },
-      filters: { minRating: 0, maxDistance: 50 },
+      filters: { minimumRating: 1, minRating: 0, maxDistance: 50 },
       leads: [],
       searchMetadata: null,
     };
@@ -53,7 +53,7 @@ const getInitialDashboardState = () => {
     if (!rawValue) {
       return {
         form: { city: '', keyword: 'car repair' },
-        filters: { minRating: 0, maxDistance: 50 },
+        filters: { minimumRating: 1, minRating: 0, maxDistance: 50 },
         leads: [],
         searchMetadata: null,
       };
@@ -63,14 +63,14 @@ const getInitialDashboardState = () => {
 
     return {
       form: parsed.form || { city: '', keyword: 'car repair' },
-      filters: parsed.filters || { minRating: 0, maxDistance: 50 },
+      filters: parsed.filters || { minimumRating: 1, minRating: 0, maxDistance: 50 },
       leads: Array.isArray(parsed.leads) ? parsed.leads : [],
       searchMetadata: parsed.searchMetadata || null,
     };
   } catch {
     return {
       form: { city: '', keyword: 'car repair' },
-      filters: { minRating: 0, maxDistance: 50 },
+      filters: { minimumRating: 1, minRating: 0, maxDistance: 50 },
       leads: [],
       searchMetadata: null,
     };
@@ -482,7 +482,7 @@ function App() {
     }
 
     setForm({ city: '', keyword: 'car repair' });
-    setFilters({ minRating: 0, maxDistance: 50 });
+    setFilters({ minimumRating: 1, minRating: 0, maxDistance: 50 });
     setLeadFilters(getDefaultLeadFilters());
     setLeads([]);
     setSearchMetadata(null);
@@ -504,9 +504,6 @@ function App() {
             searchMetadata={searchMetadata}
             searchFilters={filters}
             onSearchFilterChange={handleSearchFilterChange}
-            leadFilters={leadFilters}
-            leadFilterOptions={leadFilterOptions}
-            onLeadFilterChange={handleLeadFilterChange}
             generating={generating}
             onGenerateEmails={handleGenerateEmails}
             generatingLeadId={generatingLeadId}
