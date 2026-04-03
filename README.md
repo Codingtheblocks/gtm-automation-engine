@@ -1,8 +1,8 @@
 # GTM Automation Engine
- 
- Plug-and-play GTM automation for local B2B pipelines with Gemini-powered personalization, deterministic A/B testing, cost-aware enrichment, HubSpot sync, and real-time engagement analytics.
 
-> Production-style outbound system for sourcing leads, generating personalized emails, syncing CRM activity, and measuring campaign performance in one workflow.
+Production-grade GTM system for sourcing, enriching, and converting pipeline with built-in experimentation, cost-aware processing, and CRM-integrated analytics.
+
+Designed to optimize CAC, LTV, and campaign performance through deterministic A/B testing, segmentation, and event-driven feedback loops.
 
  **Live demo:** https://codingtheblocks.github.io/gtm-automation-engine/
 
@@ -21,7 +21,7 @@ Local B2B outreach is slow, manual, and difficult for non-technical users. Even 
 
 Most tools handle only one piece of the workflow, such as scoring, enrichment, or outreach, forcing teams to stitch together disconnected systems. Non-technical users still lack a ready-to-go solution for local B2B campaigns with instant A/B testing and measurable results.
 
-## The Solution
+## System Overview
 
 This project provides a ready-to-go, end-to-end GTM automation system for local B2B outreach. Non-technical users can instantly launch A/B email campaigns with measurable results, without manually combining multiple tools.
 
